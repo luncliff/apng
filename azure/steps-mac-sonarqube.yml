@@ -1,0 +1,52 @@
+#
+# Author: github.com/luncliff (luncliff@gmail.com)
+#
+# References
+#   https://docs.microsoft.com/en-us/azure/devops/pipelines/process/templates?view=azure-devops#passing-parameters
+#
+
+steps:
+  - task: Bash@3
+    inputs:
+      targetType: "inline"
+      script: |
+        brew install lcov;
+
+  - task: SonarCloudPrepare@1
+    inputs:
+      SonarCloud: "luncliff-sonarcloud"
+      organization: "luncliff-github"
+      scannerMode: "CLI"
+      configMode: "file"
+
+  - task: CMake@1
+    inputs:
+      cmakeArgs: .. -DCMAKE_CXX_FLAGS="--coverage" -DBUILD_SHARED_LIBS=true -DBUILD_TESTING=true -DCMAKE_BUILD_TYPE=Debug
+      workingDirectory: build
+
+  - task: CMake@1
+    inputs:
+      cmakeArgs: --build . --config Debug
+      workingDirectory: build
+
+  - task: Bash@3
+    inputs:
+      targetType: "inline"
+      script: ctest --output-on-failure
+      workingDirectory: build
+    timeoutInMinutes: 1
+
+  - task: Bash@3
+    inputs:
+      filePath: "scripts/run-gcov.sh"
+
+  - task: Bash@3
+    inputs:
+      targetType: "inline"
+      script: bash scripts/run-sonar-wrapper.sh
+    timeoutInMinutes: 5
+
+  - task: SonarCloudAnalyze@1
+  - task: SonarCloudPublish@1
+    inputs:
+      pollingTimeoutSec: "300"

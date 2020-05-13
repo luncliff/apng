@@ -1,0 +1,33 @@
+# Doxyfile 1.8.16
+
+PROJECT_NAME            = "engine"
+PROJECT_NUMBER          = "1.0"
+
+OUTPUT_LANGUAGE         = Korean-en
+MARKDOWN_SUPPORT        = YES
+
+INPUT                   = .
+INPUT_ENCODING          = UTF-8
+
+FILE_PATTERNS           = *.c *.cpp *.cc \
+                          *.h *.hpp *.inc \
+                          *.ifc *.cppm
+
+RECURSIVE               = YES
+
+EXCLUDE                 = externals test \
+                          build install \
+                          docs
+EXCLUDE_PATTERNS        = *_test.cpp
+
+EXAMPLE_PATH            = examples
+EXAMPLE_RECURSIVE       = NO
+
+IMAGE_PATH              = docs/images
+OUTPUT_DIRECTORY        = docs
+
+GENERATE_HTML           = NO
+GENERATE_XML            = YES
+GENERATE_LATEX          = NO
+
+EXTRACT_ALL             = YES
