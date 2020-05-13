@@ -1,0 +1,87 @@
+import java.nio.file.Paths
+import java.lang.*;
+
+plugins {
+    id "cpp-library"
+    id "cpp-unit-test"
+}
+repositories {
+    maven {
+        url = "https://repo.gradle.org/gradle/libs-snapshots-local/"
+    }
+}
+
+group "dev.luncliff"
+version = "1.0"
+
+task codegen(type:Exec) {
+    workingDir = project.projectDir
+    commandLine "javac", "-h", "src/main/cpp", \
+        Paths.get("src/main/java", "dev/luncliff/Native.java")
+}
+
+library {
+    baseName = "async4j" 
+    linkage = [Linkage.SHARED] 
+    targetMachines = [
+        machines.windows.x86_64, machines.linux.x86_64, machines.macOS.x86_64
+    ]
+    publicHeaders.from \
+        file("src/main/cpp")
+    source.from \
+        file("src/main/cpp")
+
+    def javaDir = System.getenv("JAVA_HOME")
+    println "using JAVA_HOME: $javaDir"
+    privateHeaders.from \
+        file("$javaDir/include"), \
+            file("$javaDir/include/win32"), file("$javaDir/include/darwin"), file("$javaDir/include/linux"), \
+        file("src/main/headers")
+}
+tasks.withType(LinkSharedLibrary).configureEach {
+    linkerArgs.addAll targetPlatform.map { platform ->
+        def system = platform.operatingSystem
+        if (system.isWindows()){
+            // return [ "kernel32" ]
+        }
+        if (system.isMacOsX()){
+            return [ "-lpthread" ]
+        }
+        if (system.isLinux()){
+            // return [ "pthread" ]
+        }
+        return []
+    }
+}
+tasks.withType(CppCompile).configureEach {
+    positionIndependentCode = true
+    debuggable = true
+    macros.put("DEBUG", "1")
+    compilerArgs.addAll toolChain.map { NativeToolChain toolChain ->
+        if (toolChain in Clang) {
+            return ["-Wall", "-std=c++2a", "-stdlib=libc++", "-fcoroutines-ts"]
+        }
+        if (toolChain in Gcc) {
+            return ["-Wall", "-std=gnu++2a", "-fcoroutine"]
+        }
+        if (toolChain in VisualCpp) {
+            return ["/W4", "/std:c++latest", "/utf-8", "/await"]
+        }
+        return [] // unknown compiler
+    }
+}
+
+unitTest {
+    baseName = "async4j_test" 
+    targetMachines = [
+        machines.windows.x86_64, machines.linux.x86_64, machines.macOS.x86_64
+    ]
+    source.from \
+        file("test/cpp")
+    privateHeaders.from \
+        file("test/cpp")
+
+    dependencies {
+        implementation "org.gradle.cpp-samples:googletest:1.9+"
+    }
+}
