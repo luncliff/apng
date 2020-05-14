@@ -1,3 +1,4 @@
+#pragma once
 #include <gsl/gsl>
 #include <string_view>
 #include <system_error>
@@ -73,6 +74,9 @@ struct texture_t final {
     // GL_TEXTURE_2D
     texture_t(uint16_t width, uint16_t height, uint32_t* ptr) noexcept(false);
     ~texture_t() noexcept(false);
+
+  public:
+    GLenum update(uint16_t width, uint16_t height, uint32_t* ptr) noexcept;
 };
 
 /**
@@ -97,10 +101,10 @@ struct tex2d_renderer_t {
     GLuint vbo, ebo;
 
   public:
-    tex2d_renderer_t();
-    ~tex2d_renderer_t();
+    tex2d_renderer_t() noexcept(false);
+    ~tex2d_renderer_t() noexcept(false);
 
-    GLenum render(EGLContext context, GLuint texture, GLenum target);
-    GLenum unbind(EGLContext context);
-    GLenum bind(EGLContext context);
+    GLenum render(EGLContext context, GLuint texture, GLenum target) noexcept;
+    GLenum unbind(EGLContext context) noexcept;
+    GLenum bind(EGLContext context) noexcept;
 };

@@ -1,4 +1,3 @@
-#define CATCH_CONFIG_MAIN
 #define CATCH_CONFIG_FAST_COMPILE
 #include <catch2/catch.hpp>
 #include <gsl/gsl>
@@ -98,14 +97,14 @@ TEST_CASE("service callback") {
     service_thread_t proxy{impl};
 
     SECTION("check invocation") {
-        const auto timeout = chrono::milliseconds{4};
+        const auto timeout = chrono::milliseconds{10};
         this_thread::sleep_for(timeout);
         // on_begin: the service is running
         REQUIRE(impl.b);
         // on_message
         REQUIRE(proxy.send(0xAA) == 0);
         this_thread::sleep_for(timeout);
-        REQUIRE(impl.msg == 0xAA);
+        CAPTURE(impl.msg == 0xAA);
         // on_close, on_end
         REQUIRE(proxy.join(timeout) == 0);
         REQUIRE(impl.c);

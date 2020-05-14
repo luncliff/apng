@@ -12,6 +12,7 @@ target_include_directories(engine
 PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
 )
 
 if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
@@ -94,7 +95,7 @@ endif()
 # vcpkg
 find_package(Threads   REQUIRED)
 find_package(unofficial-angle   CONFIG REQUIRED)
-find_package(coroutine CONFIG REQUIRED)
+# find_package(coroutine CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 target_link_libraries(engine
@@ -102,8 +103,8 @@ PUBLIC
     Threads::Threads 
     glfw glm
     unofficial::angle::libEGL unofficial::angle::libGLESv2
-    unofficial::angle::angle_common unofficial::angle::libANGLE
-    coroutine_portable
+    # unofficial::angle::angle_common unofficial::angle::libANGLE
+    # coroutine_portable
 )
 
 # install(FILES       include/engine.hpp
@@ -139,9 +140,11 @@ enable_testing()
 find_package(Catch2 CONFIG REQUIRED)
 
 add_executable(engine_test_suite
+    test/test_main.cpp
+    test/test_gles.cpp
     test/test_engine.cpp
     test/test_gles_with_angle.cpp
-    # test/test_gles_with_angle_dx11.cpp
+    # # test/test_gles_with_angle_dx11.cpp
 )
 
 target_link_libraries(engine_test_suite

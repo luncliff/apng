@@ -5,11 +5,13 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-class gles_error_t : public std::error_category {
+using namespace std;
+
+class gles_error_t : public error_category {
     const char* name() const noexcept override {
         return "ANGLE";
     }
-    std::string message(int ec = glGetError()) const override {
+    string message(int ec = glGetError()) const override {
         constexpr auto bufsz = 40;
         char buf[bufsz]{};
         auto len = snprintf(buf, bufsz, "error %d(%4x)", ec, ec);
@@ -19,7 +21,7 @@ class gles_error_t : public std::error_category {
 
 gles_error_t gles_category{};
 
-std::error_category& get_gles_category() noexcept {
+error_category& get_gles_category() noexcept {
     return gles_category;
 };
 
@@ -30,7 +32,7 @@ vao_t::~vao_t() noexcept {
     glDeleteVertexArrays(1, &name);
 }
 
-bool get_shader_info(std::string& message, GLuint shader,
+bool get_shader_info(string& message, GLuint shader,
                      GLenum status_name) noexcept {
     GLint info = GL_FALSE;
     glGetShaderiv(shader, status_name, &info);
@@ -43,7 +45,7 @@ bool get_shader_info(std::string& message, GLuint shader,
     return info;
 }
 
-bool get_program_info(std::string& message, GLuint program,
+bool get_program_info(string& message, GLuint program,
                       GLenum status_name) noexcept {
     GLint info = GL_TRUE;
     glGetProgramiv(program, status_name, &info);
@@ -57,29 +59,29 @@ bool get_program_info(std::string& message, GLuint program,
 }
 
 GLuint create_compile_attach(GLuint program, GLenum shader_type,
-                             std::string_view code) noexcept(false) {
+                             string_view code) noexcept(false) {
     auto shader = glCreateShader(shader_type);
     const GLchar* begin = code.data();
     const GLint len = code.length();
     glShaderSource(shader, 1, &begin, &len);
     glCompileShader(shader);
-    std::string message{};
+    string message{};
     if (get_shader_info(message, shader, GL_COMPILE_STATUS) == false)
-        throw std::runtime_error{message};
+        throw runtime_error{message};
 
     glAttachShader(program, shader);
     return shader;
 }
 
-program_t::program_t(std::string_view vtxt, //
-                     std::string_view ftxt) noexcept(false)
+program_t::program_t(string_view vtxt, //
+                     string_view ftxt) noexcept(false)
     : id{glCreateProgram()}, //
       vs{create_compile_attach(id, GL_VERTEX_SHADER, vtxt)},
       fs{create_compile_attach(id, GL_FRAGMENT_SHADER, ftxt)} {
     glLinkProgram(id);
-    std::string message{};
+    string message{};
     if (get_program_info(message, id, GL_LINK_STATUS) == false)
-        throw std::runtime_error{message};
+        throw runtime_error{message};
 }
 
 program_t::~program_t() noexcept {
@@ -102,7 +104,7 @@ GLint program_t::attribute(gsl::czstring<> name) const noexcept {
 texture_t::texture_t(GLuint _name, GLenum _target) noexcept(false)
     : name{_name}, target{_target} {
     if (glIsTexture(_name) == false)
-        throw std::invalid_argument{"not texture"};
+        throw invalid_argument{"not texture"};
 }
 
 texture_t::texture_t(uint16_t width, uint16_t height,
@@ -110,12 +112,24 @@ texture_t::texture_t(uint16_t width, uint16_t height,
     : name{}, target{GL_TEXTURE_2D} // we can sure the type is GL_TEXTURE_2D
 {
     glGenTextures(1, &name);
-    if (auto ec = glGetError())
-        throw std::runtime_error{"glGenTextures"};
+    if (int ec = glGetError())
+        throw system_error{ec, get_gles_category(), "glGenTextures"};
+    if (int ec = update(width, height, ptr))
+        throw system_error{ec, get_gles_category(), "glTexImage2D"};
+}
 
+texture_t::~texture_t() noexcept(false) {
+    glDeleteTextures(1, &name);
+    if (int ec = glGetError())
+        throw system_error{ec, get_gles_category(), "glDeleteTextures"};
+}
+
+GLenum texture_t::update(uint16_t width, uint16_t height,
+                         uint32_t* ptr) noexcept {
+    auto on_return = gsl::finally([target = this->target]() {
+        glBindTexture(target, 0); //
+    });
     glBindTexture(target, name);
-    auto on_return =
-        gsl::finally([target = this->target]() { glBindTexture(target, 0); });
     glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -124,14 +138,7 @@ texture_t::texture_t(uint16_t width, uint16_t height,
     glTexImage2D(target, level,                  // no mipmap
                  GL_RGBA, width, height, border, //
                  GL_RGBA, GL_UNSIGNED_BYTE, ptr);
-    if (auto ec = glGetError())
-        throw std::runtime_error{"glTexImage2D"};
-}
-
-texture_t::~texture_t() noexcept(false) {
-    glDeleteTextures(1, &name);
-    if (auto ec = glGetError())
-        throw std::runtime_error{"glDeleteTextures"};
+    return glGetError();
 }
 
 framebuffer_t::framebuffer_t(uint16_t width, uint16_t height) noexcept(false) {
@@ -143,7 +150,7 @@ framebuffer_t::framebuffer_t(uint16_t width, uint16_t height) noexcept(false) {
     glBindRenderbuffer(GL_RENDERBUFFER, buffers[0]);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
     if (auto ec = glGetError())
-        throw std::runtime_error{
+        throw runtime_error{
             "glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, ...)"};
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                               GL_RENDERBUFFER, buffers[0]);
@@ -151,8 +158,8 @@ framebuffer_t::framebuffer_t(uint16_t width, uint16_t height) noexcept(false) {
     glBindRenderbuffer(GL_RENDERBUFFER, buffers[1]);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height);
     if (auto ec = glGetError())
-        throw std::runtime_error{"glRenderbufferStorage(GL_RENDERBUFFER, "
-                                 "GL_DEPTH_COMPONENT16, ...)"};
+        throw runtime_error{"glRenderbufferStorage(GL_RENDERBUFFER, "
+                            "GL_DEPTH_COMPONENT16, ...)"};
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
                               GL_RENDERBUFFER, buffers[1]);
 
@@ -175,28 +182,28 @@ egl_bundle_t::egl_bundle_t(EGLNativeDisplayType native) noexcept(false)
     : native_window{}, native_display{native} {
     display = eglGetDisplay(native_display);
     if (eglGetError() != EGL_SUCCESS) {
-        throw std::runtime_error{"eglGetDisplay(EGL_DEFAULT_DISPLAY)"};
+        throw runtime_error{"eglGetDisplay(EGL_DEFAULT_DISPLAY)"};
     }
     eglInitialize(display, &major, &minor);
     if (eglGetError() != EGL_SUCCESS) {
-        throw std::runtime_error{"eglInitialize"};
+        throw runtime_error{"eglInitialize"};
     }
     EGLint count = 0;
     eglChooseConfig(display, nullptr, &config, 1, &count);
     if (eglGetError() != EGL_SUCCESS) {
-        throw std::runtime_error{"eglChooseConfig"};
+        throw runtime_error{"eglChooseConfig"};
     }
     if (eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) {
-        throw std::runtime_error{"eglBindAPI(EGL_OPENGL_ES_API)"};
+        throw runtime_error{"eglBindAPI(EGL_OPENGL_ES_API)"};
     }
     const EGLint attrs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
     context = eglCreateContext(display, config, EGL_NO_CONTEXT, attrs);
     if (eglGetError() != EGL_SUCCESS) {
-        throw std::runtime_error{"eglCreateContext"};
+        throw runtime_error{"eglCreateContext"};
     }
     eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, context);
     if (eglGetError() != EGL_SUCCESS) {
-        throw std::runtime_error{"eglMakeCurrent"};
+        throw runtime_error{"eglMakeCurrent"};
     }
 }
 
@@ -230,19 +237,19 @@ egl_bundle_t::egl_bundle_t(EGLNativeWindowType native,
         display = eglGetPlatformDisplayEXT(EGL_PLATFORM_ANGLE_ANGLE, //
                                            native_display, attrs);
         if (eglInitialize(display, &major, &minor) != EGL_TRUE)
-            throw std::runtime_error{"eglGetPlatformDisplayEXT, eglInitialize"};
+            throw runtime_error{"eglGetPlatformDisplayEXT, eglInitialize"};
     }
     {
         eglBindAPI(EGL_OPENGL_ES_API);
         if (eglGetError() != EGL_SUCCESS)
-            throw std::runtime_error{"eglBindAPI(EGL_OPENGL_ES_API)"};
+            throw runtime_error{"eglBindAPI(EGL_OPENGL_ES_API)"};
     }
     // Choose a config
     {
         const EGLint attrs[] = {EGL_NONE};
         EGLint num_attrs = 0;
         if (eglChooseConfig(display, attrs, &config, 1, &num_attrs) != EGL_TRUE)
-            throw std::runtime_error{"eglChooseConfig"};
+            throw runtime_error{"eglChooseConfig"};
     }
     if (is_console == false) {
         const EGLint attrs[] = {EGL_DIRECT_COMPOSITION_ANGLE, EGL_TRUE,
@@ -250,25 +257,25 @@ egl_bundle_t::egl_bundle_t(EGLNativeWindowType native,
         // Create window surface
         surface = eglCreateWindowSurface(display, config, native_window, attrs);
         if (surface == nullptr)
-            throw std::runtime_error{"eglCreateWindowSurface"};
+            throw runtime_error{"eglCreateWindowSurface"};
     }
     // Create EGL context
     {
         const EGLint attrs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
         context = eglCreateContext(display, config, EGL_NO_CONTEXT, attrs);
         if (eglGetError() != EGL_SUCCESS)
-            throw std::runtime_error{"eglCreateContext"};
+            throw runtime_error{"eglCreateContext"};
     }
     // Make the surface current
     {
         eglMakeCurrent(display, surface, surface, context);
         if (eglGetError() != EGL_SUCCESS)
-            throw std::runtime_error{"eglMakeCurrent"};
+            throw runtime_error{"eglMakeCurrent"};
     }
 }
 #endif
 
-tex2d_renderer_t::tex2d_renderer_t()
+tex2d_renderer_t::tex2d_renderer_t() noexcept(false)
     : vao{}, program{R"(
 uniform mat4 u_mvp;
 attribute vec4 a_position;
@@ -294,7 +301,7 @@ void main()
     glBindVertexArray(vao.name);
     assert(glGetError() == GL_NO_ERROR);
 
-    constexpr float ratio = 0.9f, z0 = 0; // nearly full-size
+    constexpr float ratio = 0.95f, z0 = 0; // nearly full-size
     constexpr float tx0 = 0, ty0 = 0, tx = 1, ty = 1;
     const GLfloat vertices[32] = {
         // position(3), color(3), texture coord(2)
@@ -323,13 +330,13 @@ void main()
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
-tex2d_renderer_t::~tex2d_renderer_t() {
+tex2d_renderer_t::~tex2d_renderer_t() noexcept(false) {
     GLuint buffers[2] = {vbo, ebo};
     glDeleteBuffers(2, buffers);
     assert(glGetError() == GL_NO_ERROR);
 }
 
-GLenum tex2d_renderer_t::unbind(EGLContext) {
+GLenum tex2d_renderer_t::unbind(EGLContext) noexcept {
     glUseProgram(0);
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -337,7 +344,7 @@ GLenum tex2d_renderer_t::unbind(EGLContext) {
     return glGetError();
 }
 
-GLenum tex2d_renderer_t::bind(EGLContext) {
+GLenum tex2d_renderer_t::bind(EGLContext) noexcept {
     glUseProgram(program.id);
     if (auto ec = glGetError())
         return ec;
@@ -382,7 +389,7 @@ GLenum tex2d_renderer_t::bind(EGLContext) {
 }
 
 GLenum tex2d_renderer_t::render(EGLContext context, //
-                                GLuint texture, GLenum target) {
+                                GLuint texture, GLenum target) noexcept {
     if (auto ec = bind(context))
         return ec;
     glActiveTexture(GL_TEXTURE0);

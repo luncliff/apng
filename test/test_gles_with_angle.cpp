@@ -1,8 +1,8 @@
 #define CATCH_CONFIG_FAST_COMPILE
 #include <catch2/catch.hpp>
+#include <gsl/gsl>
 
 #include <iostream>
-#include <gsl/gsl>
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -26,4 +26,4 @@ TEST_CASE("eglQueryString", "[egl]") {
             offset = ++i;
         }
     }
-} 
+}
