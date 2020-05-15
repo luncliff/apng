@@ -208,7 +208,7 @@ egl_bundle_t::egl_bundle_t(EGLNativeDisplayType native) noexcept(false)
 }
 
 #if defined(_WIN32)
-egl_bundle_t::~egl_bundle_t() {
+egl_bundle_t::~egl_bundle_t() noexcept {
     // Win32
     if (display)
         ReleaseDC(native_window, native_display);
@@ -221,7 +221,7 @@ egl_bundle_t::~egl_bundle_t() {
         eglTerminate(display);
 }
 #else
-egl_bundle_t::~egl_bundle_t() {
+egl_bundle_t::~egl_bundle_t() noexcept {
     // EGL
     if (surface != EGL_NO_SURFACE)
         eglDestroySurface(display, surface);

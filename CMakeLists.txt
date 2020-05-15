@@ -141,11 +141,10 @@ find_package(Catch2 CONFIG REQUIRED)
 
 add_executable(engine_test_suite
     test/test_main.cpp
-    test/test_gles.cpp
     test/test_engine.cpp
-    test/test_gles_with_angle.cpp
-    # # test/test_gles_with_angle_dx11.cpp
+    test/test_gles.cpp
 )
+
 set_target_properties(engine_test_suite
 PROPERTIES
     CXX_STANDARD 17
@@ -166,4 +165,17 @@ else()
     PRIVATE
         -Wno-format
     )
+endif()
+
+if(WIN32)
+    target_sources(engine_test_suite
+    PRIVATE
+        test/test_gles_glfw3.cpp
+        test/test_gles_windows.cpp
+    )
+else()
+    # target_sources(engine_test_suite
+    # PRIVATE
+    #     ...
+    # )
 endif()
