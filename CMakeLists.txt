@@ -41,7 +41,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES Clang)
         PUBLIC
             -std=c++2a -stdlib=libc++
         PRIVATE
-            -Wall -Wenginetra
+            -Wall -Wextra
         )
 
     endif()
@@ -145,6 +145,10 @@ add_executable(engine_test_suite
     test/test_engine.cpp
     test/test_gles_with_angle.cpp
     # # test/test_gles_with_angle_dx11.cpp
+)
+set_target_properties(engine_test_suite
+PROPERTIES
+    CXX_STANDARD 17
 )
 
 target_link_libraries(engine_test_suite

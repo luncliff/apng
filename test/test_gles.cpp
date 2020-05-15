@@ -1,5 +1,7 @@
 #define CATCH_CONFIG_FAST_COMPILE
 #include <catch2/catch.hpp>
+
+#include <type_traits>
 #include <gsl/gsl>
 
 #define GLFW_INCLUDE_ES3
