@@ -4,8 +4,6 @@ project(engine VERSION 1.0 LANGUAGES CXX)
 add_library(engine SHARED
     include/engine.hpp
     src/engine.cpp
-    src/gles_with_angle.h
-    src/gles_with_angle.cpp
 )
 
 target_include_directories(engine
@@ -93,18 +91,34 @@ else()
 endif()
 
 # vcpkg
-find_package(Threads   REQUIRED)
-find_package(unofficial-angle   CONFIG REQUIRED)
-# find_package(coroutine CONFIG REQUIRED)
+find_package(Threads    REQUIRED)
+find_package(coroutine CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
+# find_package(unofficial-angle   CONFIG REQUIRED)
+find_package(Vulkan     REQUIRED)
+find_package(glslang CONFIG REQUIRED)
+# find_package(spirv_cross_cpp CONFIG REQUIRED)
+# find_package(spirv_cross_glsl CONFIG REQUIRED)
+# find_package(spirv_cross_hlsl CONFIG REQUIRED)
 target_link_libraries(engine
 PUBLIC
     Threads::Threads 
     glfw glm
-    unofficial::angle::libEGL unofficial::angle::libGLESv2
+    # unofficial::angle::libEGL unofficial::angle::libGLESv2
     # unofficial::angle::angle_common unofficial::angle::libANGLE
-    # coroutine_portable
+    coroutine_portable
+    Vulkan::Vulkan
+    glslang::HLSL glslang::SPIRV # glslang::glslang glslang::OGLCompiler
+    # spirv-cross-cpp spirv-cross-hlsl # spirv-cross-glsl
+)
+
+target_sources(engine
+PRIVATE
+    src/gfx.h
+    src/gfx.cpp
+    # src/gles_with_angle.h
+    # src/gles_with_angle.cpp
 )
 
 # install(FILES       include/engine.hpp
@@ -141,10 +155,12 @@ find_package(Catch2 CONFIG REQUIRED)
 
 add_executable(engine_test_suite
     test/test_main.cpp
-    test/test_gles.cpp
     test/test_engine.cpp
-    test/test_gles_with_angle.cpp
-    # # test/test_gles_with_angle_dx11.cpp
+    
+    test/test_gfx.cpp
+    # test/test_gles.cpp
+    # test/test_gles_with_angle.cpp
+    # test/test_gles_with_angle_dx11.cpp
 )
 
 target_link_libraries(engine_test_suite
