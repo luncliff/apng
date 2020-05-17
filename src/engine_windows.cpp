@@ -67,3 +67,39 @@ uint32_t notification_t::signal() noexcept {
     return GetLastError();
   return S_OK;
 }
+
+// DirectX 11
+/*
+#include <wrl/client.h>
+#include <d3d11.h>
+#include <d3d11_1.h>
+// #include <d3dcompiler.h>
+// #include <directxmath.h>
+// #include <DirectXColors.h>
+
+#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "d3dcompiler.lib")
+#pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "comctl32")
+
+struct dx11_context_t {
+    ID3D11Device* device;
+    ID3D11DeviceContext* context;
+    D3D_FEATURE_LEVEL level;
+
+  public:
+    dx11_context_t() noexcept(false) : device{}, context{}, level{} {
+        if (auto hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, 0, 0,
+                                        nullptr, 0, D3D11_SDK_VERSION, &device,
+                                        &level, &context);
+            FAILED(hr))
+            throw std::runtime_error{"D3D11CreateDevice"};
+    }
+    ~dx11_context_t() noexcept {
+        if (device)
+            device->Release();
+        if (context)
+            context->Release();
+    }
+};
+*/

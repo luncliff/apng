@@ -4,6 +4,7 @@
 
 #include "gles_with_angle.h"
 
+
 struct app_context_t final {
     HINSTANCE instance;
     HWND window;
@@ -103,32 +104,11 @@ uint32_t run(app_context_t& app, //
         glClearColor(37.0f / 255, 27.0f / 255, 82.0f / 255, 1);
         glClear(GL_COLOR_BUFFER_BIT);
         // ...
-        if (eglSwapBuffers(egl.mDisplay, egl.mSurface) == false)
+        if (eglSwapBuffers(egl.display, egl.surface) == false)
             throw std::runtime_error{"eglSwapBuffers(mDisplay, mSurface"};
     }
     return msg.wParam;
 }
-
-struct dx11_context_t {
-    ID3D11Device* device;
-    ID3D11DeviceContext* context;
-    D3D_FEATURE_LEVEL level;
-
-  public:
-    dx11_context_t() noexcept(false) : device{}, context{}, level{} {
-        if (auto hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, 0, 0,
-                                        nullptr, 0, D3D11_SDK_VERSION, &device,
-                                        &level, &context);
-            FAILED(hr))
-            throw std::runtime_error{"D3D11CreateDevice"};
-    }
-    ~dx11_context_t() noexcept {
-        if (device)
-            device->Release();
-        if (context)
-            context->Release();
-    }
-};
 
 TEST_CASE("eglQueryString", "[egl]") {
     // eglQueryString returns static, zero-terminated string
@@ -160,38 +140,37 @@ TEST_CASE("with window/display", "[dx11]") {
         egl_bundle_t gfx{app.window, is_console};
         REQUIRE(run(app, gfx, 60 * 4) == EXIT_SUCCESS);
     }
-    SECTION("DirectX 11 Device + ANGLE") {
-        dx11_context_t dx11{};
-        EGLDeviceEXT device = eglCreateDeviceANGLE(EGL_D3D11_DEVICE_ANGLE, //
-                                                   dx11.device, nullptr);
-        REQUIRE(device != EGL_NO_DEVICE_EXT);
-        eglReleaseDeviceANGLE(device);
-    }
+    //SECTION("DirectX 11 Device + ANGLE") {
+    //    dx11_context_t dx11{};
+    //    EGLDeviceEXT device = eglCreateDeviceANGLE(EGL_D3D11_DEVICE_ANGLE, //
+    //                                               dx11.device, nullptr);
+    //    REQUIRE(device != EGL_NO_DEVICE_EXT);
+    //    eglReleaseDeviceANGLE(device);
+    //}
 }
 
 TEST_CASE("without window/display", "[egl]") {
     SECTION("manual construction") {
         egl_bundle_t egl{};
-        egl.mDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+        egl.display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
         REQUIRE(eglGetError() == EGL_SUCCESS);
 
-        REQUIRE(eglInitialize(egl.mDisplay, nullptr, nullptr) == EGL_TRUE);
+        REQUIRE(eglInitialize(egl.display, nullptr, nullptr) == EGL_TRUE);
         REQUIRE(eglGetError() == EGL_SUCCESS);
 
         EGLint count = 0;
-        eglChooseConfig(egl.mDisplay, nullptr, &egl.mConfig, 1, &count);
+        eglChooseConfig(egl.display, nullptr, &egl.config, 1, &count);
         CAPTURE(count);
         REQUIRE(eglGetError() == EGL_SUCCESS);
 
         REQUIRE(eglBindAPI(EGL_OPENGL_ES_API));
-        egl.mContext =
-            eglCreateContext(egl.mDisplay, egl.mConfig, EGL_NO_CONTEXT, NULL);
+        egl.context = eglCreateContext(egl.display, egl.config, //
+                                       EGL_NO_CONTEXT, NULL);
         REQUIRE(eglGetError() == EGL_SUCCESS);
 
         // ...
-
-        eglMakeCurrent(egl.mDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
-                       egl.mContext);
+        eglMakeCurrent(egl.display, EGL_NO_SURFACE, EGL_NO_SURFACE,
+                       egl.context);
         REQUIRE(eglGetError() == EGL_SUCCESS);
     }
     SECTION("default display") {

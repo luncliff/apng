@@ -1,9 +1,19 @@
 cmake_minimum_required(VERSION 3.8)
 project(engine VERSION 1.0 LANGUAGES CXX)
 
+if(NOT ${CMAKE_TOOLCHAIN_FILE} MATCHES vcpkg.cmake)
+    message(FATAL_ERROR "requires vcpkg.cmake for CMAKE_TOOLCHAIN_FILE")
+endif()
+message(STATUS "using vcpkg: ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+
 add_library(engine SHARED
     include/engine.hpp
     src/engine.cpp
+)
+
+set_target_properties(engine
+PROPERTIES
+    PUBLIC_HEADER include/engine.hpp
 )
 
 target_include_directories(engine
@@ -18,7 +28,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
     PUBLIC
         -std=gnu++17
     PRIVATE
-        -Wall -Wenginetra
+        -Wall -Wextra
     )
     target_link_libraries(engine
     PUBLIC
@@ -95,9 +105,8 @@ find_package(Threads    REQUIRED)
 find_package(coroutine CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
-# find_package(unofficial-angle   CONFIG REQUIRED)
 find_package(Vulkan     REQUIRED)
-find_package(glslang CONFIG REQUIRED)
+# find_package(glslang CONFIG REQUIRED)
 # find_package(spirv_cross_cpp CONFIG REQUIRED)
 # find_package(spirv_cross_glsl CONFIG REQUIRED)
 # find_package(spirv_cross_hlsl CONFIG REQUIRED)
@@ -105,32 +114,48 @@ target_link_libraries(engine
 PUBLIC
     Threads::Threads 
     glfw glm
-    # unofficial::angle::libEGL unofficial::angle::libGLESv2
-    # unofficial::angle::angle_common unofficial::angle::libANGLE
     coroutine_portable
     Vulkan::Vulkan
-    glslang::HLSL glslang::SPIRV # glslang::glslang glslang::OGLCompiler
+    # glslang::HLSL glslang::SPIRV # glslang::glslang glslang::OGLCompiler
     # spirv-cross-cpp spirv-cross-hlsl # spirv-cross-glsl
 )
 
-target_sources(engine
-PRIVATE
-    src/gfx.h
-    src/gfx.cpp
-    # src/gles_with_angle.h
-    # src/gles_with_angle.cpp
+find_program(glslc_path
+    NAMES   glslc.exe glslc
+    PATHS   ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools
+    # NO_DEFAULT_PATH 
+)
+file(RELATIVE_PATH short_path ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET} ${glslc_path})
+message(STATUS "using glslc: ${short_path}")
+add_custom_target(compile_shaders_glsl
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/assets
+    COMMAND     ${glslc_path} --version
+    COMMAND     ${glslc_path} sample.vert -o sample_vert.spv
+    COMMAND     ${glslc_path} sample.frag -o sample_frag.spv
 )
 
-# install(FILES       include/engine.hpp
-#         DESTINATION ${CMAKE_INSTALL_PREFIX}/include/${PROJECT_NAME}
-# )
+find_package(unofficial-angle)
+if(WIN32)
+elseif(NOT APPLE AND unofficial-angle_FOUND) # can't use GLFW3 + ANGLE
+    target_sources(engine
+    PRIVATE
+        src/gles_with_angle.h
+        src/gles_with_angle.cpp
+    )
+    target_link_libraries(engine
+    PUBLIC
+        unofficial::angle::libEGL unofficial::angle::libGLESv2
+        unofficial::angle::angle_common unofficial::angle::libANGLE
+    )
+endif()
+
 install(TARGETS         engine
         EXPORT          ${PROJECT_NAME}-config
         RUNTIME         DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
         LIBRARY         DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
         ARCHIVE         DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-        INCLUDES        DESTINATION ${CMAKE_INSTALL_PREFIX}/include
-        PUBLIC_HEADER   DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+        # INCLUDES        DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+        PUBLIC_HEADER   DESTINATION ${CMAKE_INSTALL_PREFIX}/include/${PROJECT_NAME}
 )
 install(EXPORT          ${PROJECT_NAME}-config
         DESTINATION     ${CMAKE_INSTALL_PREFIX}/share/${PROJECT_NAME}
@@ -156,11 +181,15 @@ find_package(Catch2 CONFIG REQUIRED)
 add_executable(engine_test_suite
     test/test_main.cpp
     test/test_engine.cpp
-    
     test/test_gfx.cpp
     # test/test_gles.cpp
     # test/test_gles_with_angle.cpp
     # test/test_gles_with_angle_dx11.cpp
+)
+
+set_target_properties(engine_test_suite
+PROPERTIES
+    CXX_STANDARD 20
 )
 
 target_link_libraries(engine_test_suite
@@ -181,14 +210,22 @@ else()
 endif()
 
 if(WIN32)
-    target_sources(engine_test_suite
-    PRIVATE
-        test/test_gles_glfw3.cpp
-        test/test_gles_windows.cpp
-    )
+    # target_sources(engine_test_suite
+    # PRIVATE
+    #     test/test_gles_glfw3.cpp
+    #     test/test_gles_windows.cpp
+    # )
 else()
     # target_sources(engine_test_suite
     # PRIVATE
     #     ...
     # )
 endif()
+
+target_compile_definitions(engine_test_suite
+PRIVATE
+    ASSET_DIR="${PROJECT_SOURCE_DIR}/assets"
+    WASSET_DIR=L"${PROJECT_SOURCE_DIR}/assets"
+)
+
+add_test(NAME test_vulkan COMMAND engine_test_suite "[vulkan]")

@@ -22,9 +22,10 @@ info_file=${3:-"coverage.info"}
 
 lcov --directory ${build_dir} --capture --output-file ${info_file}
 
-lcov --remove ${info_file} '*/usr/*'          --output-file ${info_file}
-lcov --remove ${info_file} '*/externals/*'   --output-file ${info_file}
-lcov --remove ${info_file} '*_test.cpp'      --output-file ${info_file}
+lcov --remove ${info_file} '*/usr/*'            --output-file ${info_file}
+lcov --remove ${info_file} '*/vcpkg/*'          --output-file ${info_file}
+lcov --remove ${info_file} '*/externals/*'      --output-file ${info_file}
+lcov --remove ${info_file} '*/test/test_*.cpp'  --output-file ${info_file}
 lcov --list ${info_file}
 
 mkdir -p ${save_dir}

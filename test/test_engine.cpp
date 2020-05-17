@@ -6,7 +6,7 @@
 
 using namespace std;
 
-TEST_CASE("message queue") {
+TEST_CASE("message queue", "[message]") {
     message_queue_t q{};
 
     SECTION("multiple widow") {
@@ -59,7 +59,7 @@ TEST_CASE("message queue") {
     }
 }
 
-TEST_CASE("service callback") {
+TEST_CASE("service callback", "[message]") {
     struct impl_t : public service_callback_t {
         bool b = false, c = false;
         uintptr_t msg = UINT32_MAX;
@@ -122,7 +122,7 @@ TEST_CASE("service callback") {
     }
 }
 
-TEST_CASE("echo back") {
+TEST_CASE("echo back", "[message]") {
     struct impl_t final : public service_callback_t {
         message_queue_t mq;
 
@@ -181,7 +181,7 @@ TEST_CASE("echo back") {
     }
 }
 
-TEST_CASE("echo notify") {
+TEST_CASE("echo notify", "[message]") {
     struct impl_t final : public service_callback_t {
         notification_t ev;
 
