@@ -39,7 +39,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES Clang)
         PUBLIC
             -std=c++2a -stdlib=libc++
         PRIVATE
-            -Wall -Wenginetra
+            -Wall -Wextra
         )
 
     endif()
@@ -178,4 +178,17 @@ else()
     PRIVATE
         -Wno-format
     )
+endif()
+
+if(WIN32)
+    target_sources(engine_test_suite
+    PRIVATE
+        test/test_gles_glfw3.cpp
+        test/test_gles_windows.cpp
+    )
+else()
+    # target_sources(engine_test_suite
+    # PRIVATE
+    #     ...
+    # )
 endif()

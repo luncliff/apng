@@ -196,7 +196,7 @@ egl_bundle_t::egl_bundle_t(EGLNativeDisplayType native) noexcept(false)
     if (eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) {
         throw runtime_error{"eglBindAPI(EGL_OPENGL_ES_API)"};
     }
-    const EGLint attrs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
+    const EGLint attrs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
     context = eglCreateContext(display, config, EGL_NO_CONTEXT, attrs);
     if (eglGetError() != EGL_SUCCESS) {
         throw runtime_error{"eglCreateContext"};
@@ -207,7 +207,8 @@ egl_bundle_t::egl_bundle_t(EGLNativeDisplayType native) noexcept(false)
     }
 }
 
-egl_bundle_t::~egl_bundle_t() {
+#if defined(_WIN32)
+egl_bundle_t::~egl_bundle_t() noexcept {
     // Win32
     if (display)
         ReleaseDC(native_window, native_display);
@@ -219,6 +220,17 @@ egl_bundle_t::~egl_bundle_t() {
     if (display != EGL_NO_DISPLAY)
         eglTerminate(display);
 }
+#else
+egl_bundle_t::~egl_bundle_t() noexcept {
+    // EGL
+    if (surface != EGL_NO_SURFACE)
+        eglDestroySurface(display, surface);
+    if (context != EGL_NO_CONTEXT)
+        eglDestroyContext(display, context);
+    if (display != EGL_NO_DISPLAY)
+        eglTerminate(display);
+}
+#endif
 
 #if __has_include("EGL/eglext_angle.h")
 egl_bundle_t::egl_bundle_t(EGLNativeWindowType native,
