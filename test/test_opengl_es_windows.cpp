@@ -1,9 +1,50 @@
+/**
+ * @file test_opengl_es_windows.cpp
+ *
+ * @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLSyncControlTest.cpp
+ * @see https://github.com/google/angle/blob/master/util/windows/win32/Win32Window.cpp 
+ */
 #define CATCH_CONFIG_FAST_COMPILE
 #include <catch2/catch.hpp>
 #include <string_view>
 
-#include "gles_with_angle.h"
+#include "opengl_es.h"
 
+// DirectX 11
+// clang-format off
+#include <wrl/client.h>
+
+#include <d3d11.h>
+#include <d3d11_1.h>
+#include <d3dcompiler.h>
+#include <directxmath.h>
+#include <DirectXColors.h>
+#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "d3dcompiler.lib")
+#pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "comctl32")
+// clang-format on
+
+struct dx11_context_t {
+    ID3D11Device* device;
+    ID3D11DeviceContext* context;
+    D3D_FEATURE_LEVEL level;
+
+  public:
+    dx11_context_t() noexcept(false) : device{}, context{}, level{} {
+        if (auto hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, 0, 0,
+                                        nullptr, 0, D3D11_SDK_VERSION, &device,
+                                        &level, &context);
+            FAILED(hr))
+            throw std::runtime_error{"D3D11CreateDevice"};
+    }
+    ~dx11_context_t() noexcept {
+        if (device)
+            device->Release();
+        if (context)
+            context->Release();
+    }
+};
 
 struct app_context_t final {
     HINSTANCE instance;
@@ -108,45 +149,6 @@ uint32_t run(app_context_t& app, //
             throw std::runtime_error{"eglSwapBuffers(mDisplay, mSurface"};
     }
     return msg.wParam;
-}
-
-TEST_CASE("eglQueryString", "[egl]") {
-    // eglQueryString returns static, zero-terminated string
-    SECTION("EGL_EXTENSIONS") {
-        const auto txt = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
-        REQUIRE(txt);
-        const auto txtlen = strlen(txt);
-
-        auto offset = 0;
-        for (auto i = 0u; i < txtlen; ++i) {
-            if (isspace(txt[i]) == false)
-                continue;
-            const auto extname = std::string_view{txt + offset, i - offset};
-            CAPTURE(extname);
-            offset = ++i;
-        }
-    }
-}
-
-// https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLSyncControlTest.cpp
-// https://github.com/google/angle/blob/master/util/windows/win32/Win32Window.cpp
-TEST_CASE("with window/display", "[dx11]") {
-    app_context_t app{GetModuleHandle(NULL)};
-    REQUIRE(app.instance);
-    REQUIRE(app.window);
-
-    SECTION("Game Loop") {
-        constexpr bool is_console = false;
-        egl_bundle_t gfx{app.window, is_console};
-        REQUIRE(run(app, gfx, 60 * 4) == EXIT_SUCCESS);
-    }
-    //SECTION("DirectX 11 Device + ANGLE") {
-    //    dx11_context_t dx11{};
-    //    EGLDeviceEXT device = eglCreateDeviceANGLE(EGL_D3D11_DEVICE_ANGLE, //
-    //                                               dx11.device, nullptr);
-    //    REQUIRE(device != EGL_NO_DEVICE_EXT);
-    //    eglReleaseDeviceANGLE(device);
-    //}
 }
 
 TEST_CASE("without window/display", "[egl]") {

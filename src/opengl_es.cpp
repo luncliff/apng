@@ -1,29 +1,118 @@
-#include "gles_with_angle.h"
-
-#include <cassert>
+#include "opengl_es.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 using namespace std;
 
-class gles_error_t : public error_category {
-    const char* name() const noexcept override {
-        return "ANGLE";
+egl_bundle_t::egl_bundle_t(EGLNativeDisplayType native) noexcept(false)
+    : native_window{}, native_display{native} {
+    display = eglGetDisplay(native_display);
+    if (eglGetError() != EGL_SUCCESS) {
+        throw runtime_error{"eglGetDisplay(EGL_DEFAULT_DISPLAY)"};
     }
-    string message(int ec = glGetError()) const override {
-        constexpr auto bufsz = 40;
-        char buf[bufsz]{};
-        auto len = snprintf(buf, bufsz, "error %d(%4x)", ec, ec);
-        return {buf, static_cast<size_t>(len)};
+    eglInitialize(display, &major, &minor);
+    if (eglGetError() != EGL_SUCCESS) {
+        throw runtime_error{"eglInitialize"};
     }
-};
+    EGLint count = 0;
+    eglChooseConfig(display, nullptr, &config, 1, &count);
+    if (eglGetError() != EGL_SUCCESS) {
+        throw runtime_error{"eglChooseConfig"};
+    }
+    if (eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) {
+        throw runtime_error{"eglBindAPI(EGL_OPENGL_ES_API)"};
+    }
+    const EGLint attrs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
+    context = eglCreateContext(display, config, EGL_NO_CONTEXT, attrs);
+    if (eglGetError() != EGL_SUCCESS) {
+        throw runtime_error{"eglCreateContext"};
+    }
+    eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, context);
+    if (eglGetError() != EGL_SUCCESS) {
+        throw runtime_error{"eglMakeCurrent"};
+    }
+}
 
-gles_error_t gles_category{};
+#if defined(_WIN32)
+egl_bundle_t::~egl_bundle_t() noexcept {
+    // Win32
+    if (display)
+        ReleaseDC(native_window, native_display);
+    // EGL
+    if (surface != EGL_NO_SURFACE)
+        eglDestroySurface(display, surface);
+    if (context != EGL_NO_CONTEXT)
+        eglDestroyContext(display, context);
+    if (display != EGL_NO_DISPLAY)
+        eglTerminate(display);
+}
+#else
+egl_bundle_t::~egl_bundle_t() noexcept {
+    // EGL
+    if (surface != EGL_NO_SURFACE)
+        eglDestroySurface(display, surface);
+    if (context != EGL_NO_CONTEXT)
+        eglDestroyContext(display, context);
+    if (display != EGL_NO_DISPLAY)
+        eglTerminate(display);
+}
+#endif
 
-error_category& get_gles_category() noexcept {
-    return gles_category;
-};
+#if __has_include(<EGL/eglext_angle.h>)
+egl_bundle_t::egl_bundle_t(EGLNativeWindowType native,
+                           bool is_console) noexcept(false)
+    : native_window{native}, native_display{GetDC(native)} {
+    {
+        const EGLint attrs[] = {EGL_PLATFORM_ANGLE_TYPE_ANGLE,
+                                EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE,
+                                EGL_PLATFORM_ANGLE_MAX_VERSION_MAJOR_ANGLE,
+                                EGL_DONT_CARE,
+                                EGL_PLATFORM_ANGLE_MAX_VERSION_MINOR_ANGLE,
+                                EGL_DONT_CARE,
+                                EGL_PLATFORM_ANGLE_DEVICE_TYPE_ANGLE,
+                                EGL_PLATFORM_ANGLE_DEVICE_TYPE_HARDWARE_ANGLE,
+                                EGL_NONE};
+        display = eglGetPlatformDisplayEXT(EGL_PLATFORM_ANGLE_ANGLE, //
+                                           native_display, attrs);
+        if (eglInitialize(display, &major, &minor) != EGL_TRUE)
+            throw runtime_error{"eglGetPlatformDisplayEXT, eglInitialize"};
+    }
+    {
+        eglBindAPI(EGL_OPENGL_ES_API);
+        if (eglGetError() != EGL_SUCCESS)
+            throw runtime_error{"eglBindAPI(EGL_OPENGL_ES_API)"};
+    }
+    // Choose a config
+    {
+        const EGLint attrs[] = {EGL_NONE};
+        EGLint num_attrs = 0;
+        if (eglChooseConfig(display, attrs, &config, 1, &num_attrs) != EGL_TRUE)
+            throw runtime_error{"eglChooseConfig"};
+    }
+    if (is_console == false) {
+        const EGLint attrs[] = {EGL_DIRECT_COMPOSITION_ANGLE, EGL_TRUE,
+                                EGL_NONE};
+        // Create window surface
+        surface = eglCreateWindowSurface(display, config, native_window, attrs);
+        if (surface == nullptr)
+            throw runtime_error{"eglCreateWindowSurface"};
+    }
+    // Create EGL context
+    {
+        const EGLint attrs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
+        context = eglCreateContext(display, config, EGL_NO_CONTEXT, attrs);
+        if (eglGetError() != EGL_SUCCESS)
+            throw runtime_error{"eglCreateContext"};
+    }
+    // Make the surface current
+    {
+        eglMakeCurrent(display, surface, surface, context);
+        if (eglGetError() != EGL_SUCCESS)
+            throw runtime_error{"eglMakeCurrent"};
+    }
+}
+#endif
 
 vao_t::vao_t() noexcept {
     glGenVertexArrays(1, &name);
@@ -32,12 +121,17 @@ vao_t::~vao_t() noexcept {
     glDeleteVertexArrays(1, &name);
 }
 
+GLenum vao_t::bind() noexcept {
+    glBindVertexArray(name);
+    return glGetError();
+}
+
 bool get_shader_info(string& message, GLuint shader,
                      GLenum status_name) noexcept {
     GLint info = GL_FALSE;
     glGetShaderiv(shader, status_name, &info);
     if (info != GL_TRUE) {
-        GLsizei buf_len = 400;
+        GLsizei buf_len = 2000;
         message.resize(buf_len);
         glGetShaderInfoLog(shader, buf_len, &buf_len, message.data());
         message.resize(buf_len); // shrink
@@ -50,7 +144,7 @@ bool get_program_info(string& message, GLuint program,
     GLint info = GL_TRUE;
     glGetProgramiv(program, status_name, &info);
     if (info != GL_TRUE) {
-        GLsizei buf_len = 400;
+        GLsizei buf_len = 2000;
         message.resize(buf_len);
         glGetProgramInfoLog(program, buf_len, &buf_len, message.data());
         message.resize(buf_len); // shrink
@@ -73,8 +167,8 @@ GLuint create_compile_attach(GLuint program, GLenum shader_type,
     return shader;
 }
 
-program_t::program_t(string_view vtxt, //
-                     string_view ftxt) noexcept(false)
+shader_program_t::shader_program_t(string_view vtxt, //
+                                   string_view ftxt) noexcept(false)
     : id{glCreateProgram()}, //
       vs{create_compile_attach(id, GL_VERTEX_SHADER, vtxt)},
       fs{create_compile_attach(id, GL_FRAGMENT_SHADER, ftxt)} {
@@ -82,22 +176,24 @@ program_t::program_t(string_view vtxt, //
     string message{};
     if (get_program_info(message, id, GL_LINK_STATUS) == false)
         throw runtime_error{message};
+    if (int ec = glGetError())
+        throw runtime_error{get_gles_category().message(ec)};
 }
 
-program_t::~program_t() noexcept {
+shader_program_t::~shader_program_t() noexcept {
     glDeleteShader(vs);
     glDeleteShader(fs);
     glDeleteProgram(id);
 }
 
-program_t::operator bool() const noexcept {
+shader_program_t::operator bool() const noexcept {
     return glIsProgram(id);
 }
 
-GLint program_t::uniform(gsl::czstring<> name) const noexcept {
+GLint shader_program_t::uniform(gsl::czstring<> name) const noexcept {
     return glGetUniformLocation(id, name);
 }
-GLint program_t::attribute(gsl::czstring<> name) const noexcept {
+GLint shader_program_t::attribute(gsl::czstring<> name) const noexcept {
     return glGetAttribLocation(id, name);
 }
 
@@ -177,115 +273,6 @@ GLenum framebuffer_t::bind() noexcept {
     //glBindRenderbuffer(GL_RENDERBUFFER, buffers[0]);
     return glGetError();
 }
-
-egl_bundle_t::egl_bundle_t(EGLNativeDisplayType native) noexcept(false)
-    : native_window{}, native_display{native} {
-    display = eglGetDisplay(native_display);
-    if (eglGetError() != EGL_SUCCESS) {
-        throw runtime_error{"eglGetDisplay(EGL_DEFAULT_DISPLAY)"};
-    }
-    eglInitialize(display, &major, &minor);
-    if (eglGetError() != EGL_SUCCESS) {
-        throw runtime_error{"eglInitialize"};
-    }
-    EGLint count = 0;
-    eglChooseConfig(display, nullptr, &config, 1, &count);
-    if (eglGetError() != EGL_SUCCESS) {
-        throw runtime_error{"eglChooseConfig"};
-    }
-    if (eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) {
-        throw runtime_error{"eglBindAPI(EGL_OPENGL_ES_API)"};
-    }
-    const EGLint attrs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
-    context = eglCreateContext(display, config, EGL_NO_CONTEXT, attrs);
-    if (eglGetError() != EGL_SUCCESS) {
-        throw runtime_error{"eglCreateContext"};
-    }
-    eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, context);
-    if (eglGetError() != EGL_SUCCESS) {
-        throw runtime_error{"eglMakeCurrent"};
-    }
-}
-
-#if defined(_WIN32)
-egl_bundle_t::~egl_bundle_t() noexcept {
-    // Win32
-    if (display)
-        ReleaseDC(native_window, native_display);
-    // EGL
-    if (surface != EGL_NO_SURFACE)
-        eglDestroySurface(display, surface);
-    if (context != EGL_NO_CONTEXT)
-        eglDestroyContext(display, context);
-    if (display != EGL_NO_DISPLAY)
-        eglTerminate(display);
-}
-#else
-egl_bundle_t::~egl_bundle_t() noexcept {
-    // EGL
-    if (surface != EGL_NO_SURFACE)
-        eglDestroySurface(display, surface);
-    if (context != EGL_NO_CONTEXT)
-        eglDestroyContext(display, context);
-    if (display != EGL_NO_DISPLAY)
-        eglTerminate(display);
-}
-#endif
-
-#if __has_include("EGL/eglext_angle.h")
-egl_bundle_t::egl_bundle_t(EGLNativeWindowType native,
-                           bool is_console) noexcept(false)
-    : native_window{native}, native_display{GetDC(native)} {
-    {
-        const EGLint attrs[] = {EGL_PLATFORM_ANGLE_TYPE_ANGLE,
-                                EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE,
-                                EGL_PLATFORM_ANGLE_MAX_VERSION_MAJOR_ANGLE,
-                                EGL_DONT_CARE,
-                                EGL_PLATFORM_ANGLE_MAX_VERSION_MINOR_ANGLE,
-                                EGL_DONT_CARE,
-                                EGL_PLATFORM_ANGLE_DEVICE_TYPE_ANGLE,
-                                EGL_PLATFORM_ANGLE_DEVICE_TYPE_HARDWARE_ANGLE,
-                                EGL_NONE};
-        display = eglGetPlatformDisplayEXT(EGL_PLATFORM_ANGLE_ANGLE, //
-                                           native_display, attrs);
-        if (eglInitialize(display, &major, &minor) != EGL_TRUE)
-            throw runtime_error{"eglGetPlatformDisplayEXT, eglInitialize"};
-    }
-    {
-        eglBindAPI(EGL_OPENGL_ES_API);
-        if (eglGetError() != EGL_SUCCESS)
-            throw runtime_error{"eglBindAPI(EGL_OPENGL_ES_API)"};
-    }
-    // Choose a config
-    {
-        const EGLint attrs[] = {EGL_NONE};
-        EGLint num_attrs = 0;
-        if (eglChooseConfig(display, attrs, &config, 1, &num_attrs) != EGL_TRUE)
-            throw runtime_error{"eglChooseConfig"};
-    }
-    if (is_console == false) {
-        const EGLint attrs[] = {EGL_DIRECT_COMPOSITION_ANGLE, EGL_TRUE,
-                                EGL_NONE};
-        // Create window surface
-        surface = eglCreateWindowSurface(display, config, native_window, attrs);
-        if (surface == nullptr)
-            throw runtime_error{"eglCreateWindowSurface"};
-    }
-    // Create EGL context
-    {
-        const EGLint attrs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
-        context = eglCreateContext(display, config, EGL_NO_CONTEXT, attrs);
-        if (eglGetError() != EGL_SUCCESS)
-            throw runtime_error{"eglCreateContext"};
-    }
-    // Make the surface current
-    {
-        eglMakeCurrent(display, surface, surface, context);
-        if (eglGetError() != EGL_SUCCESS)
-            throw runtime_error{"eglMakeCurrent"};
-    }
-}
-#endif
 
 tex2d_renderer_t::tex2d_renderer_t() noexcept(false)
     : vao{}, program{R"(
@@ -411,4 +398,22 @@ GLenum tex2d_renderer_t::render(EGLContext context, //
         return ec;
     glBindTexture(target, 0);
     return this->unbind(context);
+}
+
+class gles_error_category_t : public error_category {
+    const char* name() const noexcept override {
+        return "google/ANGLE";
+    }
+    string message(int ec) const override {
+        constexpr auto bufsz = 40;
+        char buf[bufsz]{};
+        const auto len = snprintf(buf, bufsz, "error %5d(%4x)", ec, ec);
+        return {buf, static_cast<size_t>(len)};
+    }
+};
+
+gles_error_category_t errors{};
+
+error_category& get_gles_category() noexcept {
+    return errors;
 }

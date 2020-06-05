@@ -1,43 +1,46 @@
 cmake_minimum_required(VERSION 3.8)
-project(engine VERSION 1.0 LANGUAGES CXX)
+project(graphics VERSION 1.0 LANGUAGES CXX)
 
 if(NOT ${CMAKE_TOOLCHAIN_FILE} MATCHES vcpkg.cmake)
     message(FATAL_ERROR "requires vcpkg.cmake for CMAKE_TOOLCHAIN_FILE")
 endif()
 message(STATUS "using vcpkg: ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
 
-add_library(engine SHARED
-    include/engine.hpp
-    src/engine.cpp
+set(VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17134.0")
+
+add_library(graphics SHARED
+    src/main.cpp
 )
 
-set_target_properties(engine
-PROPERTIES
-    PUBLIC_HEADER include/engine.hpp
-)
-
-target_include_directories(engine
+target_include_directories(graphics
 PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+PRIVATE
+    externals/include
+)
+
+target_link_libraries(graphics
+PUBLIC
+    ${CMAKE_DL_LIBS}
 )
 
 if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
-    target_compile_options(engine
+    target_compile_options(graphics
     PUBLIC
-        -std=gnu++17
+        -std=gnu++20
     PRIVATE
         -Wall -Wextra
     )
-    target_link_libraries(engine
+    target_link_libraries(graphics
     PUBLIC
         stdc++
     )
 
 elseif(CMAKE_CXX_COMPILER_ID MATCHES Clang)
     if(WIN32)
-        target_compile_options(engine
+        target_compile_options(graphics
         PUBLIC
             /std:c++latest
         PRIVATE
@@ -45,7 +48,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES Clang)
         )
 
     else()
-        target_compile_options(engine
+        target_compile_options(graphics
         PUBLIC
             -std=c++2a -stdlib=libc++
         PRIVATE
@@ -55,7 +58,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES Clang)
     endif()
 
 elseif(MSVC)
-    target_compile_options(engine
+    target_compile_options(graphics
     PUBLIC
         /std:c++latest
     PRIVATE
@@ -63,59 +66,65 @@ elseif(MSVC)
     )
 endif()
 
+target_sources(graphics
+PRIVATE
+    include/service.hpp
+    src/service.cpp
+)
+
 if(WIN32)
-    set_target_properties(engine
+    set_target_properties(graphics
     PROPERTIES
         WINDOWS_EXPORT_ALL_SYMBOLS True
-        VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17134.0"
     )
-    target_sources(engine
+    target_sources(graphics
     PRIVATE
-        src/engine_windows.cpp
+        src/service_windows.cpp
     )
-    target_link_libraries(engine
+    target_link_libraries(graphics
     PUBLIC
         kernel32 synchronization
     )
 
 elseif(APPLE)
-    target_sources(engine
+    target_sources(graphics
     PRIVATE
-        src/engine_unistd.cpp
+        src/service_posix.cpp
     )
-    target_link_libraries(engine
+    target_link_libraries(graphics
     PUBLIC
         c++
     )
 
 else()
-    target_sources(engine
+    target_sources(graphics
     PRIVATE
-        src/engine_unistd.cpp
+        src/service_posix.cpp
     )
-    target_link_libraries(engine
+    target_link_libraries(graphics
     PUBLIC
         c++ m
     )
 
 endif()
 
-# vcpkg
+#
+# https://github.com/microsoft/vcpkg 2020.05
+#
 find_package(Threads    REQUIRED)
 find_package(coroutine CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
-find_package(glfw3 CONFIG REQUIRED)
+find_package(glfw3 3.3 CONFIG REQUIRED)
 find_package(Vulkan     REQUIRED)
 # find_package(glslang CONFIG REQUIRED)
 # find_package(spirv_cross_cpp CONFIG REQUIRED)
 # find_package(spirv_cross_glsl CONFIG REQUIRED)
 # find_package(spirv_cross_hlsl CONFIG REQUIRED)
-target_link_libraries(engine
+
+target_link_libraries(graphics
 PUBLIC
-    Threads::Threads 
-    glfw glm
-    coroutine_portable
-    Vulkan::Vulkan
+    coroutine_portable Threads::Threads 
+    glfw glm Vulkan::Vulkan
     # glslang::HLSL glslang::SPIRV # glslang::glslang glslang::OGLCompiler
     # spirv-cross-cpp spirv-cross-hlsl # spirv-cross-glsl
 )
@@ -126,7 +135,7 @@ find_program(glslc_path
     # NO_DEFAULT_PATH 
 )
 file(RELATIVE_PATH short_path ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET} ${glslc_path})
-message(STATUS "using glslc: ${short_path}")
+message(STATUS "using glslc: ${glslc_path}")
 add_custom_target(compile_shaders_glsl
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/assets
     COMMAND     ${glslc_path} --version
@@ -135,21 +144,22 @@ add_custom_target(compile_shaders_glsl
 )
 
 find_package(unofficial-angle)
-if(WIN32)
-elseif(NOT APPLE AND unofficial-angle_FOUND) # can't use GLFW3 + ANGLE
-    target_sources(engine
-    PRIVATE
-        src/gles_with_angle.h
-        src/gles_with_angle.cpp
-    )
-    target_link_libraries(engine
-    PUBLIC
-        unofficial::angle::libEGL unofficial::angle::libGLESv2
-        unofficial::angle::angle_common unofficial::angle::libANGLE
-    )
+if(unofficial-angle_FOUND)
+    if(NOT APPLE) # can't use GLFW3 + ANGLE
+        message(STATUS "using google/ANGLE")
+        target_sources(graphics
+        PRIVATE
+            include/opengl_es.h
+            src/opengl_es.cpp
+        )
+        target_link_libraries(graphics
+        PUBLIC
+            unofficial::angle::libEGL unofficial::angle::libGLESv2
+        )
+    endif()
 endif()
 
-install(TARGETS         engine
+install(TARGETS         graphics
         EXPORT          ${PROJECT_NAME}-config
         RUNTIME         DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
         LIBRARY         DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
@@ -178,54 +188,61 @@ enable_testing()
 
 find_package(Catch2 CONFIG REQUIRED)
 
-add_executable(engine_test_suite
+add_executable(graphics_test_suite
     test/test_main.cpp
-    test/test_engine.cpp
-    test/test_gfx.cpp
-    # test/test_gles.cpp
-    # test/test_gles_with_angle.cpp
-    # test/test_gles_with_angle_dx11.cpp
+    test/test_message_queue.cpp
+    test/test_async_service.cpp
+    test/test_vulkan_glfw.cpp
+)
+add_dependencies(graphics_test_suite
+    compile_shaders_glsl
 )
 
-set_target_properties(engine_test_suite
+set_target_properties(graphics_test_suite
 PROPERTIES
     CXX_STANDARD 20
 )
 
-target_link_libraries(engine_test_suite
+target_include_directories(graphics_test_suite
 PRIVATE
-    engine Catch2::Catch2
+    externals/include
+)
+
+target_link_libraries(graphics_test_suite
+PRIVATE
+    graphics Catch2::Catch2
 )
 
 if(MSVC)
-    target_compile_options(engine_test_suite
+    target_compile_options(graphics_test_suite
     PRIVATE
         /wd4477
     )
 else()
-    target_compile_options(engine_test_suite
+    target_compile_options(graphics_test_suite
     PRIVATE
         -Wno-format
     )
 endif()
 
 if(WIN32)
-    # target_sources(engine_test_suite
-    # PRIVATE
-    #     test/test_gles_glfw3.cpp
-    #     test/test_gles_windows.cpp
-    # )
+    target_sources(graphics_test_suite
+    PRIVATE
+        test/test_opengl_es.cpp
+        test/test_opengl_es_glfw.cpp
+        test/test_opengl_es_windows.cpp
+    )
 else()
-    # target_sources(engine_test_suite
+    # target_sources(graphics_test_suite
     # PRIVATE
     #     ...
     # )
 endif()
 
-target_compile_definitions(engine_test_suite
+target_compile_definitions(graphics_test_suite
 PRIVATE
     ASSET_DIR="${PROJECT_SOURCE_DIR}/assets"
     WASSET_DIR=L"${PROJECT_SOURCE_DIR}/assets"
 )
 
-add_test(NAME test_vulkan COMMAND engine_test_suite "[vulkan]")
+add_test(NAME test_vulkan COMMAND graphics_test_suite "[vulkan]")

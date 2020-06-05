@@ -12,7 +12,7 @@
 #define GLFW_INCLUDE_GLEXT
 #include <GLFW/glfw3.h>
 
-#include "gles_with_angle.h"
+#include "opengl_es.h"
 
 using namespace std;
 

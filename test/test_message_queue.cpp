@@ -1,8 +1,7 @@
 #define CATCH_CONFIG_FAST_COMPILE
 #include <catch2/catch.hpp>
-#include <gsl/gsl>
 
-#include <engine.hpp>
+#include <service.hpp>
 
 using namespace std;
 
@@ -36,15 +35,15 @@ TEST_CASE("message queue", "[message]") {
             size_t count = 0;
             while (widowed == false) {
                 if (auto ec = q.recv(msg, widowed)) {
-                    fprintf(stdout, "errored: %d %s\n", ec, strerror(ec));
+                    //fprintf(stdout, "errored: %d %s\n", ec, strerror(ec));
                     break;
                 }
-                fprintf(stdout, "recv   : %u\n", msg);
+                //fprintf(stdout, "recv   : %lu\n", msg);
                 ++count;
                 msg = 0;
             }
             if (widowed) {
-                fprintf(stdout, "widowed: %u\n", msg); // expect 0x00
+                //fprintf(stdout, "widowed: %lu\n", msg); // expect 0x00
             }
             return count;
         });
@@ -67,26 +66,26 @@ TEST_CASE("service callback", "[message]") {
 
       private:
         uint32_t on_begin(uintptr_t& u) noexcept override {
-            fprintf(stdout, "%-10s %u\n", __func__, u);
-            fprintf(stdout, "  thread   %u\n", get_current_thread_id());
+            //fprintf(stdout, "%-10s %lu\n", __func__, u);
+            //fprintf(stdout, "  thread  %x\n", get_current_thread_id());
             b = true;
             return 0;
         }
         void on_end(uintptr_t u) noexcept override {
-            fprintf(stdout, "%-10s %u\n", __func__, u);
-            fprintf(stdout, "  thread   %u\n", get_current_thread_id());
+            //fprintf(stdout, "%-10s %u\n", __func__, u);
+            //fprintf(stdout, "  thread  %x\n", get_current_thread_id());
         }
         void on_close(uintptr_t u, uint32_t _ec) noexcept override {
-            fprintf(stdout, "%-10s %u\n", __func__, u);
-            fprintf(stdout, "  thread   %u\n", get_current_thread_id());
-            fprintf(stdout, "  error    %u\n", _ec);
+            //fprintf(stdout, "%-10s %u\n", __func__, u);
+            //fprintf(stdout, "  thread  %x\n", get_current_thread_id());
+            //fprintf(stdout, "  error   %u\n", _ec);
             c = true;
             ec = _ec;
         }
         uint32_t on_message(uintptr_t& u, uintptr_t _msg) noexcept override {
-            fprintf(stdout, "%-10s %u\n", __func__, u);
-            fprintf(stdout, "  thread   %u\n", get_current_thread_id());
-            fprintf(stdout, "  message  %zu\n", msg);
+            //fprintf(stdout, "%-10s %u\n", __func__, u);
+            //fprintf(stdout, "  thread  %x\n", get_current_thread_id());
+            //fprintf(stdout, "  message %zu\n", msg);
             u = (uintptr_t)get_current_thread_id();
             msg = _msg;
             return 0;

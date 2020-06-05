@@ -1,16 +1,21 @@
+/**
+ * @brief RAII for OpenGL ES + ANGLE
+ * 
+ * @see   https://github.com/google/angle 2019.12.31+
+ */
 #pragma once
 #include <gsl/gsl>
 #include <string_view>
 #include <system_error>
 
-// OpenGL ES / ANGLE
 #include <GLES3/gl3.h>
 //#include <GLES3/gl31.h>
+#define EGL_EGLEXT_PROTOTYPES
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #if __has_include(<EGL/eglext_angle.h>)
 #include <EGL/eglext_angle.h>
-#include <EGL/eglplatform.h>
+// #include <EGL/eglplatform.h>
 #endif
 
 /**
@@ -28,9 +33,11 @@ struct egl_bundle_t {
   public:
     explicit egl_bundle_t(EGLNativeDisplayType native //
                           = EGL_DEFAULT_DISPLAY) noexcept(false);
+    ~egl_bundle_t() noexcept;
+#if __has_include(<EGL/eglext_angle.h>)
     egl_bundle_t(EGLNativeWindowType native, //
                  bool is_console) noexcept(false);
-    ~egl_bundle_t() noexcept;
+#endif
 };
 
 std::error_category& get_gles_category() noexcept;
@@ -44,18 +51,20 @@ struct vao_t {
   public:
     vao_t() noexcept;
     ~vao_t() noexcept;
+
+    GLenum bind() noexcept;
 };
 
 /**
  * @brief OpenGL Shader Program + RAII
  */
-struct program_t {
+struct shader_program_t {
     GLuint id, vs, fs;
 
   public:
-    program_t(std::string_view vtxt, //
-              std::string_view ftxt) noexcept(false);
-    ~program_t() noexcept;
+    shader_program_t(std::string_view vtxt, //
+                     std::string_view ftxt) noexcept(false);
+    ~shader_program_t() noexcept;
 
     operator bool() const noexcept;
     GLint uniform(gsl::czstring<> name) const noexcept;
@@ -97,7 +106,7 @@ struct framebuffer_t {
 
 struct tex2d_renderer_t {
     vao_t vao;
-    program_t program;
+    shader_program_t program;
     GLuint vbo, ebo;
 
   public:

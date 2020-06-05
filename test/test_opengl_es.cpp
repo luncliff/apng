@@ -6,9 +6,6 @@
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
-#define GLFW_INCLUDE_ES3
-//#define GLFW_INCLUDE_GLEXT
-#include <GLFW/glfw3.h>
 
 TEST_CASE("eglQueryString", "[egl]") {
     // eglQueryString returns static, zero-terminated string
