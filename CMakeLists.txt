@@ -10,6 +10,9 @@ set(VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17134.0")
 
 add_library(graphics SHARED
     src/main.cpp
+    src/vulkan.cpp
+    include/service.hpp
+    src/service.cpp
 )
 
 target_include_directories(graphics
@@ -66,12 +69,6 @@ elseif(MSVC)
     )
 endif()
 
-target_sources(graphics
-PRIVATE
-    include/service.hpp
-    src/service.cpp
-)
-
 if(WIN32)
     set_target_properties(graphics
     PROPERTIES
@@ -114,7 +111,6 @@ endif()
 find_package(Threads    REQUIRED)
 find_package(coroutine CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
-find_package(glfw3 3.3 CONFIG REQUIRED)
 find_package(Vulkan     REQUIRED)
 # find_package(glslang CONFIG REQUIRED)
 # find_package(spirv_cross_cpp CONFIG REQUIRED)
@@ -124,7 +120,7 @@ find_package(Vulkan     REQUIRED)
 target_link_libraries(graphics
 PUBLIC
     coroutine_portable Threads::Threads 
-    glfw glm Vulkan::Vulkan
+    glm Vulkan::Vulkan
     # glslang::HLSL glslang::SPIRV # glslang::glslang glslang::OGLCompiler
     # spirv-cross-cpp spirv-cross-hlsl # spirv-cross-glsl
 )
@@ -185,7 +181,7 @@ if(NOT BUILD_TESTING)
     return()
 endif()
 enable_testing()
-
+find_package(glfw3 3.3 CONFIG REQUIRED)
 find_package(Catch2 CONFIG REQUIRED)
 
 add_executable(graphics_test_suite
@@ -210,7 +206,7 @@ PRIVATE
 
 target_link_libraries(graphics_test_suite
 PRIVATE
-    graphics Catch2::Catch2
+    graphics glfw Catch2::Catch2
 )
 
 if(MSVC)

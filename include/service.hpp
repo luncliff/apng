@@ -3,8 +3,13 @@
  */
 #pragma once
 #include <cerrno>
+#include <cstdio>
+#include <filesystem>
 #include <future>
+#include <memory>
 #include <system_error>
+
+namespace fs = std::filesystem;
 
 #if __has_include(<experimental/coroutine>) // C++ 20 Coroutines TS
 #include <experimental/coroutine>
@@ -182,3 +187,7 @@ struct fire_and_forget final {
     };
 };
 #endif
+
+auto open(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)>;
+auto read(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]>;
+auto read_all(const fs::path& p, size_t& fsize) -> std::unique_ptr<std::byte[]>;
