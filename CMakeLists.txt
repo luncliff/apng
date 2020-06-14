@@ -6,9 +6,9 @@ if(NOT ${CMAKE_TOOLCHAIN_FILE} MATCHES vcpkg.cmake)
 endif()
 message(STATUS "using vcpkg: ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
 
-set(VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17134.0")
+set(CMAKE_VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17134.0")
 
-add_library(graphics SHARED
+add_library(graphics
     src/main.cpp
     src/vulkan.cpp
     include/service.hpp
@@ -119,7 +119,8 @@ find_package(Vulkan     REQUIRED)
 
 target_link_libraries(graphics
 PUBLIC
-    coroutine_portable Threads::Threads 
+    coroutine_portable
+    Threads::Threads 
     glm Vulkan::Vulkan
     # glslang::HLSL glslang::SPIRV # glslang::glslang glslang::OGLCompiler
     # spirv-cross-cpp spirv-cross-hlsl # spirv-cross-glsl
@@ -139,20 +140,35 @@ add_custom_target(compile_shaders_glsl
     COMMAND     ${glslc_path} sample.frag -o sample_frag.spv
 )
 
-find_package(unofficial-angle)
-if(unofficial-angle_FOUND)
-    if(NOT APPLE) # can't use GLFW3 + ANGLE
-        message(STATUS "using google/ANGLE")
-        target_sources(graphics
-        PRIVATE
-            include/opengl_es.h
-            src/opengl_es.cpp
-        )
-        target_link_libraries(graphics
-        PUBLIC
-            unofficial::angle::libEGL unofficial::angle::libGLESv2
-        )
-    endif()
+
+target_sources(graphics
+PRIVATE
+    src/opengl.h    src/opengl.cpp
+    src/opengl_es.h src/opengl_es.cpp
+    src/programs.h  src/programs.cpp
+)
+if(WIN32)
+    find_package(unofficial-angle   CONFIG REQUIRED)
+    target_link_libraries(graphics
+    PRIVATE
+        unofficial::angle::libEGL
+        unofficial::angle::libGLESv2
+    )
+
+elseif(APPLE)
+    target_sources(graphics
+    PRIVATE
+        src/opengl_darwin.cpp
+    )
+    target_link_libraries(graphics
+    PUBLIC
+        ${CMAKE_DL_LIBS} "-framework OpenGL"
+    )
+    target_compile_definitions(graphics
+    PUBLIC
+        GL_SILENCE_DEPRECATION
+    )
+
 endif()
 
 install(TARGETS         graphics
@@ -229,10 +245,10 @@ if(WIN32)
         test/test_opengl_es_windows.cpp
     )
 else()
-    # target_sources(graphics_test_suite
-    # PRIVATE
-    #     ...
-    # )
+    target_sources(graphics_test_suite
+    PRIVATE
+        test/test_opengl_glfw.cpp
+    )
 endif()
 
 target_compile_definitions(graphics_test_suite
@@ -241,4 +257,5 @@ PRIVATE
     WASSET_DIR=L"${PROJECT_SOURCE_DIR}/assets"
 )
 
+add_test(NAME test_opengl COMMAND graphics_test_suite "[opengl]")
 add_test(NAME test_vulkan COMMAND graphics_test_suite "[vulkan]")

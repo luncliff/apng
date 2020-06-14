@@ -3,6 +3,15 @@
 using namespace std;
 
 #if defined(_WIN32)
+
+auto create(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)> {
+    auto fpath = p.generic_wstring();
+    FILE* fp{};
+    if (auto ec = _wfopen_s(&fp, fpath.c_str(), L"w+b"))
+        throw system_error{static_cast<int>(ec), system_category(), "fopen"};
+    return {fp, &fclose};
+}
+
 auto open(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)> {
     auto fpath = p.generic_wstring();
     FILE* fp{};
@@ -32,6 +41,14 @@ auto read(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]> {
 
 #else
 #include <sys/stat.h>
+
+auto create(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)> {
+    auto fpath = p.generic_u8string();
+    FILE* fp = fopen(fpath.c_str(), "w+b");
+    if (fp == nullptr)
+        throw system_error{errno, system_category(), "fopen"};
+    return {fp, &fclose};
+}
 
 auto open(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)> {
     auto fpath = p.generic_u8string();

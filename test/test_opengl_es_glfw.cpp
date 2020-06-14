@@ -1,8 +1,8 @@
 #define CATCH_CONFIG_FAST_COMPILE
 #include <catch2/catch.hpp>
 
-#include <type_traits>
 #include <gsl/gsl>
+#include <type_traits>
 
 #if defined(__APPLE__)
 #define GLFW_INCLUDE_ES2
@@ -33,7 +33,7 @@ class gfx_program_t {
 
 auto create_tex2d_program() -> unique_ptr<gfx_program_t>;
 
-TEST_CASE("GL Framework + OpenGL") {
+TEST_CASE("GL Framework + OpenGL", "[opengl]") {
     auto window = create_test_window("OpenGL ES");
     if (window == nullptr) {
         const char* message = nullptr;
@@ -71,14 +71,14 @@ void run_program(GLFWwindow* window, EGLContext context, //
         glClearColor(color, color, color, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         if (auto ec = gfx.draw(context))
-            FAIL(get_gles_category().message(ec));
+            FAIL(get_opengl_category().message(ec));
         // present
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 }
 
-TEST_CASE("tex2d_renderer_t") {
+TEST_CASE("tex2d_renderer_t", "[opengl]") {
     auto window = create_test_window("OpenGL ES");
     if (window == nullptr) {
         const char* message = nullptr;
@@ -92,15 +92,15 @@ TEST_CASE("tex2d_renderer_t") {
 
     SECTION("GL_TEXTURE_2D") {
         class impl_t final : public gfx_program_t {
-            unique_ptr<tex2d_renderer_t> renderer{};
-            unique_ptr<texture_t> tex{};
+            unique_ptr<texure2d_renderer_t> renderer{};
+            unique_ptr<opengl_texture_t> tex{};
 
           public:
             ~impl_t() noexcept = default;
 
           public:
             void setup(EGLContext) noexcept(false) override {
-                renderer = make_unique<tex2d_renderer_t>();
+                renderer = make_unique<texure2d_renderer_t>();
             }
             void teardown(EGLContext) noexcept(false) override {
                 auto _renderer = move(renderer);
@@ -110,9 +110,10 @@ TEST_CASE("tex2d_renderer_t") {
                         uint16_t w, uint16_t h) noexcept(false) override {
                 glViewport(0, 0, w, h);
                 if (tex == nullptr)
-                    tex = make_unique<texture_t>(w, h, nullptr);
+                    tex = make_unique<opengl_texture_t>(w, h, nullptr);
                 if (int ec = tex->update(w, h, nullptr))
-                    throw system_error{ec, get_gles_category(), "glTexImage2D"};
+                    throw system_error{ec, get_opengl_category(),
+                                       "glTexImage2D"};
             }
 
             GLenum draw(EGLContext context) override {
@@ -129,27 +130,11 @@ TEST_CASE("tex2d_renderer_t") {
     return run_program(window.get(), context, *program);
 }
 
+void configure_glfw() noexcept;
 auto create_test_window(const char* window_name) -> shared_ptr<GLFWwindow> {
     if (glfwInit() == GLFW_FALSE)
         return nullptr;
-#if defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
-    // https://www.glfw.org/docs/latest/window_guide.html#GLFW_CONTEXT_CREATION_API_hint
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
-    glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
-#if defined(GLFW_INCLUDE_ES2)
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2); // ES 2.0
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-#elif defined(GLFW_INCLUDE_ES3)
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // ES 3.1
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-#endif
-#else
-    // glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // 3.3 Core
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-#endif
-    REQUIRE(glGetError() == GL_NO_ERROR);
+    configure_glfw();
     return shared_ptr<GLFWwindow>{
         glfwCreateWindow(480, 480, window_name, NULL, NULL),
         [](GLFWwindow* window) {

@@ -188,6 +188,7 @@ struct fire_and_forget final {
 };
 #endif
 
+auto create(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)>;
 auto open(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)>;
 auto read(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]>;
 auto read_all(const fs::path& p, size_t& fsize) -> std::unique_ptr<std::byte[]>;
