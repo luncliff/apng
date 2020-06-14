@@ -6,6 +6,7 @@
 #include "service.hpp"
 
 #define GLFW_INCLUDE_GLEXT
+#define GLFW_INCLUDE_ES3
 #include <GLFW/glfw3.h>
 
 namespace fs = std::filesystem;
@@ -124,7 +125,13 @@ TEST_CASE("offscreen - texture2d_renderer_t", "[opengl]") {
 }
 
 void configure_glfw() noexcept {
-#if defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
+#if defined(__APPLE__)
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+    glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+#elif defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
     glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
 #if defined(GLFW_INCLUDE_ES2)
@@ -134,12 +141,6 @@ void configure_glfw() noexcept {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // ES 3.1
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
 #endif
-#elif defined(__APPLE__)
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-    glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
 #endif
 }
 /**

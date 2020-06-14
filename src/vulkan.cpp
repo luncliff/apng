@@ -2,6 +2,8 @@
 
 #include <vector>
 
+using namespace std;
+
 static VKAPI_ATTR VkBool32 VKAPI_CALL
 on_debug_message(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                  VkDebugUtilsMessageTypeFlagsEXT mtype,
@@ -26,7 +28,7 @@ vulkan_instance_t::vulkan_instance_t(
     VkInstanceCreateInfo request{};
     request.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     request.pApplicationInfo = &info;
-    std::vector<gsl::czstring<>> extensions{};
+    vector<gsl::czstring<>> extensions{};
     if (fextensions) {
         uint32_t count = 0;
         const char** names = fextensions(&count);
@@ -38,16 +40,16 @@ vulkan_instance_t::vulkan_instance_t(
             static_cast<uint32_t>(extensions.size());
         request.ppEnabledExtensionNames = extensions.data();
     }
-    std::vector<gsl::czstring<>> names{};
+    vector<gsl::czstring<>> names{};
     {
         uint32_t count = 0;
         if (auto ec = vkEnumerateInstanceLayerProperties(&count, nullptr))
             throw vulkan_exception_t{ec, "vkEnumerateInstanceLayerProperties"};
-        layers = std::make_unique<VkLayerProperties[]>(count);
+        layers = make_unique<VkLayerProperties[]>(count);
         if (auto ec = vkEnumerateInstanceLayerProperties(&count, layers.get()))
             throw vulkan_exception_t{ec, "vkEnumerateInstanceLayerProperties"};
         for (auto i = 0u; i < count; ++i) {
-            using namespace std::string_view_literals;
+            using namespace string_view_literals;
             const auto& layer = layers[i];
             if ("VK_LAYER_KHRONOS_validation"sv == layer.layerName) {
                 names.emplace_back(layer.layerName);
@@ -76,7 +78,7 @@ VkResult get_physical_deivce(VkInstance instance,
     physical_device = VK_NULL_HANDLE;
     if (count == 0)
         return VK_ERROR_DEVICE_LOST;
-    auto devices = std::make_unique<VkPhysicalDevice[]>(count);
+    auto devices = make_unique<VkPhysicalDevice[]>(count);
     if (auto ec = vkEnumeratePhysicalDevices(instance, &count, devices.get()))
         return ec;
     for (auto i = 0u; i < count; ++i) {
@@ -100,7 +102,7 @@ VkResult make_device(VkPhysicalDevice physical_device, VkDevice& handle,
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, nullptr);
     if (count == 0)
         return VK_ERROR_UNKNOWN;
-    auto properties = std::make_unique<VkQueueFamilyProperties[]>(count);
+    auto properties = make_unique<VkQueueFamilyProperties[]>(count);
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count,
                                              properties.get());
     VkDeviceQueueCreateInfo queue_info{};
@@ -142,7 +144,7 @@ VkResult make_device(VkPhysicalDevice physical_device, VkSurfaceKHR surface,
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, nullptr);
     if (count == 0)
         return VK_ERROR_UNKNOWN;
-    auto properties = std::make_unique<VkQueueFamilyProperties[]>(count);
+    auto properties = make_unique<VkQueueFamilyProperties[]>(count);
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count,
                                              properties.get());
     VkDeviceQueueCreateInfo queues[2]{};
@@ -379,7 +381,7 @@ VkResult check_surface_format(VkPhysicalDevice device, VkSurfaceKHR surface,
     if (auto ec = vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface,
                                                        &num_formats, nullptr))
         return ec;
-    auto formats = std::make_unique<VkSurfaceFormatKHR[]>(num_formats);
+    auto formats = make_unique<VkSurfaceFormatKHR[]>(num_formats);
     if (auto ec = vkGetPhysicalDeviceSurfaceFormatsKHR(
             device, surface, &num_formats, formats.get()))
         return ec;
@@ -403,7 +405,7 @@ VkResult check_present_mode(VkPhysicalDevice device, VkSurfaceKHR surface,
     if (auto ec = vkGetPhysicalDeviceSurfacePresentModesKHR(
             device, surface, &num_modes, nullptr))
         return ec;
-    auto modes = std::make_unique<VkPresentModeKHR[]>(num_modes);
+    auto modes = make_unique<VkPresentModeKHR[]>(num_modes);
     if (auto ec = vkGetPhysicalDeviceSurfacePresentModesKHR(
             device, surface, &num_modes, modes.get()))
         return ec;
@@ -422,7 +424,7 @@ vulkan_shader_module_t::vulkan_shader_module_t(
     VkDevice _device, const fs::path fpath) noexcept(false)
     : device{_device} {
     if (fs::exists(fpath) == false)
-        throw std::invalid_argument{fpath.generic_u8string()};
+        throw system_error{ENOENT, system_category()};
     VkShaderModuleCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     const auto blob = read_all(fpath, info.codeSize);
@@ -470,13 +472,13 @@ vulkan_presentation_t::vulkan_presentation_t(
     if (auto ec =
             vkGetSwapchainImagesKHR(device, swapchain, &num_images, nullptr))
         throw vulkan_exception_t{ec, "vkGetSwapchainImagesKHR"};
-    num_images = std::min(num_images, capabilities.minImageCount + 1);
-    images = std::make_unique<VkImage[]>(num_images);
+    num_images = min(num_images, capabilities.minImageCount + 1);
+    images = make_unique<VkImage[]>(num_images);
     if (auto ec = vkGetSwapchainImagesKHR(device, swapchain, &num_images,
                                           images.get()))
         throw vulkan_exception_t{ec, "vkGetSwapchainImagesKHR"};
 
-    image_views = std::make_unique<VkImageView[]>(num_images);
+    image_views = make_unique<VkImageView[]>(num_images);
     for (auto i = 0u; i < num_images; ++i) {
         VkImageViewCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -493,7 +495,7 @@ vulkan_presentation_t::vulkan_presentation_t(
                                         &image_views[i]))
             throw vulkan_exception_t{ec, "vkCreateImageView"};
     }
-    framebuffers = std::make_unique<VkFramebuffer[]>(num_images);
+    framebuffers = make_unique<VkFramebuffer[]>(num_images);
     for (auto i = 0u; i < num_images; ++i) {
         VkFramebufferCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -530,7 +532,7 @@ vulkan_command_pool_t::vulkan_command_pool_t(VkDevice _device,
         if (auto ec = vkCreateCommandPool(device, &info, nullptr, &handle))
             throw vulkan_exception_t{ec, "vkCreateCommandPool"};
     }
-    buffers = std::make_unique<VkCommandBuffer[]>(count);
+    buffers = make_unique<VkCommandBuffer[]>(count);
     VkCommandBufferAllocateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     info.commandPool = handle;

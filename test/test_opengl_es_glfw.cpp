@@ -13,6 +13,7 @@
 #include <GLFW/glfw3.h>
 
 #include "opengl_es.h"
+#include "programs.h"
 
 using namespace std;
 
@@ -92,7 +93,7 @@ TEST_CASE("tex2d_renderer_t", "[opengl]") {
 
     SECTION("GL_TEXTURE_2D") {
         class impl_t final : public gfx_program_t {
-            unique_ptr<texure2d_renderer_t> renderer{};
+            unique_ptr<texture2d_renderer_t> renderer{};
             unique_ptr<opengl_texture_t> tex{};
 
           public:
@@ -100,7 +101,7 @@ TEST_CASE("tex2d_renderer_t", "[opengl]") {
 
           public:
             void setup(EGLContext) noexcept(false) override {
-                renderer = make_unique<texure2d_renderer_t>();
+                renderer = make_unique<texture2d_renderer_t>();
             }
             void teardown(EGLContext) noexcept(false) override {
                 auto _renderer = move(renderer);
@@ -110,7 +111,7 @@ TEST_CASE("tex2d_renderer_t", "[opengl]") {
                         uint16_t w, uint16_t h) noexcept(false) override {
                 glViewport(0, 0, w, h);
                 if (tex == nullptr)
-                    tex = make_unique<opengl_texture_t>(w, h, nullptr);
+                    tex = make_unique<opengl_texture_t>();
                 if (int ec = tex->update(w, h, nullptr))
                     throw system_error{ec, get_opengl_category(),
                                        "glTexImage2D"};

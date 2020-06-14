@@ -30,7 +30,7 @@ auto read(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]> {
     while (!feof(stream)) {
         auto b = blob.get() + rsz;
         const auto sz = info.st_size - rsz;
-        rsz += fread_s(b, sz, sizeof(byte), sz, stream);
+        rsz += fread_s(b, sz, sizeof(std::byte), sz, stream);
         if (auto ec = ferror(stream))
             throw system_error{ec, system_category(), "fread_s"};
         if (rsz == info.st_size)

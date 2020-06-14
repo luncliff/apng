@@ -140,7 +140,9 @@ add_custom_target(compile_shaders_glsl
     COMMAND     ${glslc_path} sample.frag -o sample_frag.spv
 )
 
-
+#
+#   OpenGL ES
+#
 target_sources(graphics
 PRIVATE
     src/opengl.h    src/opengl.cpp
@@ -148,11 +150,19 @@ PRIVATE
     src/programs.h  src/programs.cpp
 )
 if(WIN32)
+    target_sources(graphics
+    PRIVATE
+        src/opengl_windows.cpp
+    )
     find_package(unofficial-angle   CONFIG REQUIRED)
     target_link_libraries(graphics
     PRIVATE
         unofficial::angle::libEGL
         unofficial::angle::libGLESv2
+    )
+    target_compile_definitions(graphics
+    PUBLIC
+        WIN32_LEAN_AND_MEAN NOMINMAX
     )
 
 elseif(APPLE)
@@ -243,6 +253,7 @@ if(WIN32)
         test/test_opengl_es.cpp
         test/test_opengl_es_glfw.cpp
         test/test_opengl_es_windows.cpp
+        test/test_opengl_glfw.cpp
     )
 else()
     target_sources(graphics_test_suite
