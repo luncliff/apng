@@ -43,12 +43,18 @@ VkResult get_physical_device(VkInstance instance,
 uint32_t get_graphics_queue_available(VkQueueFamilyProperties* properties,
                                       uint32_t count) noexcept;
 
+/**
+ * @brief Create a new `VkDevice` with GFX queue
+ */
 VkResult make_device(VkPhysicalDevice physical_device, VkDevice& handle,
                      uint32_t& queue_index, float priority = 0.012f) noexcept;
 
 uint32_t get_surface_support(VkPhysicalDevice device, VkSurfaceKHR surface,
                              uint32_t count, uint32_t exclude_index) noexcept;
 
+/**
+ * @brief Create a new `VkDevice` with GFX, Present queue
+ */
 VkResult make_device(VkPhysicalDevice physical_device, VkSurfaceKHR surface,
                      VkDevice& handle, //
                      uint32_t& graphics_index, uint32_t& present_index,
@@ -61,6 +67,10 @@ VkResult check_surface_format(VkPhysicalDevice device, VkSurfaceKHR surface,
 VkResult check_present_mode(VkPhysicalDevice device, VkSurfaceKHR surface,
                             const VkPresentModeKHR present_mode,
                             bool& suitable) noexcept;
+
+/**
+ * @todo Create a new `VkDevice` with GFX, Present, Transfer queue
+ */
 
 struct vulkan_renderpass_t final {
     const VkDevice device{};
@@ -84,10 +94,12 @@ class vulkan_pipeline_input_t {
   public:
     virtual ~vulkan_pipeline_input_t() noexcept = default;
 
+    virtual void setup_shader_stage(
+        VkPipelineShaderStageCreateInfo (&stage)[2]) noexcept(false) = 0;
     virtual void setup_vertex_input_state(
-        VkPipelineVertexInputStateCreateInfo& info) noexcept = 0;
+        VkPipelineVertexInputStateCreateInfo& info) noexcept(false) = 0;
     virtual void record(VkPipeline pipeline,
-                        VkCommandBuffer commands) noexcept = 0;
+                        VkCommandBuffer commands) noexcept(false) = 0;
 };
 
 struct vulkan_pipeline_t final {
@@ -113,8 +125,7 @@ struct vulkan_pipeline_t final {
                                      VkShaderModule frag) noexcept(false);
     vulkan_pipeline_t(const vulkan_renderpass_t& renderpass,
                       VkSurfaceCapabilitiesKHR& capabilities, //
-                      vulkan_pipeline_input_t& input,         //
-                      VkShaderModule vert, VkShaderModule frag) noexcept(false);
+                      vulkan_pipeline_input_t& input) noexcept(false);
 
     ~vulkan_pipeline_t() noexcept;
 

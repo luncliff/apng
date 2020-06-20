@@ -235,13 +235,12 @@ void vulkan_renderpass_t::setup_color_attachment(
     color_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 }
 
-vulkan_pipeline_t::vulkan_pipeline_t(const vulkan_renderpass_t& renderpass,
-                                     VkSurfaceCapabilitiesKHR& capabilities, //
-                                     vulkan_pipeline_input_t& input,         //
-                                     VkShaderModule vert,
-                                     VkShaderModule frag) noexcept(false)
+vulkan_pipeline_t::vulkan_pipeline_t(
+    const vulkan_renderpass_t& renderpass,
+    VkSurfaceCapabilitiesKHR& capabilities,
+    vulkan_pipeline_input_t& input) noexcept(false)
     : device{renderpass.device} {
-    setup_shader_stage(shader_stages, vert, frag);
+    input.setup_shader_stage(shader_stages);
     input.setup_vertex_input_state(vertex_input_state);
     setup_input_assembly(input_assembly);
     setup_viewport_scissor(capabilities, viewport_state, viewport, scissor);

@@ -131,14 +131,15 @@ TEST_CASE("offscreen - texture2d_renderer_t", "[opengl][glfw]") {
 auto create_opengl_window(gsl::czstring<> window_name) noexcept
     -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)> {
 #if defined(__APPLE__)
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API); // OpenGL
+    glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-    glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // 3.2 Core
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
 #elif defined(_WIN32)
 #if defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API); // OpenGL ES
     glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
 #if defined(GLFW_INCLUDE_ES2)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2); // ES 2.0
@@ -149,9 +150,8 @@ auto create_opengl_window(gsl::czstring<> window_name) noexcept
 #endif
 #endif // defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
 #endif // __APPLE__ || _WIN32
+    const auto axis = 160 * 5;
     return std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>{
-        glfwCreateWindow(160 * 5, 160 * 5, //
-                         window_name,      //
-                         NULL, NULL),
+        glfwCreateWindow(axis, axis, window_name, NULL, NULL),
         &glfwDestroyWindow};
 }

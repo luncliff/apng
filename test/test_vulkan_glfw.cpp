@@ -65,6 +65,8 @@ auto make_pipeline_input(VkDevice device,
 TEST_CASE("GLFW + Vulkan", "[vulkan][glfw]") {
     // glfw init + window
     auto window = create_vulkan_window("Test Window: Vulkan");
+    glfwMakeContextCurrent(window.get());
+
     // instance / physical device
     vulkan_instance_t instance{"glfw3", glfwGetRequiredInstanceExtensions};
     VkPhysicalDevice physical_device{};
@@ -110,15 +112,12 @@ TEST_CASE("GLFW + Vulkan", "[vulkan][glfw]") {
     REQUIRE(queues[0] != VK_NULL_HANDLE);
     REQUIRE(queues[1] != VK_NULL_HANDLE);
 
+    // input data + shader + recording
     auto input = make_pipeline_input(device, physical_properties);
 
     // graphics pipeline + presentation
     vulkan_renderpass_t renderpass{device, surface_format};
-    const auto asset_dir = get_asset_dir();
-    vulkan_shader_module_t vert{device, asset_dir / "sample_vert.spv"};
-    vulkan_shader_module_t frag{device, asset_dir / "sample_frag.spv"};
-    vulkan_pipeline_t pipeline{renderpass, capabilities, //
-                               *input, vert.handle, frag.handle};
+    vulkan_pipeline_t pipeline{renderpass, capabilities, *input};
     {
         auto swapchain = std::make_unique<vulkan_swapchain_t>(
             device, surface, capabilities, surface_format, surface_color_space,
@@ -306,20 +305,29 @@ struct input1_t : vulkan_pipeline_input_t {
     VkDeviceSize offsets[binding_count]{};
     VkBufferCreateInfo buffer_info{};
     VkDeviceMemory memory{};
+    vulkan_shader_module_t vert, frag;
 
   public:
-    input1_t(VkDevice _device, const VkPhysicalDeviceMemoryProperties& props)
+    input1_t(VkDevice _device,
+             const VkPhysicalDeviceMemoryProperties& props) noexcept(false)
         : device{_device}, vertices{{{0.0f, -0.5f}, {1, 0, 0}},
                                     {{0.5f, 0.5f}, {0, 1, 0}},
-                                    {{-0.5f, 0.5f}, {0, 0, 1}}} {
+                                    {{-0.5f, 0.5f}, {0, 0, 1}}},
+          vert{device, get_asset_dir() / "sample_vert.spv"},
+          frag{device, get_asset_dir() / "sample_frag.spv"} {
+        // ...
         make_input_description(info, desc, attrs);
         if (auto ec = create_buffer(buffers[0], buffer_info))
             throw vulkan_exception_t{ec, "vkCreateBuffer"};
-        if (auto ec = create_memory(buffers[0], memory, buffer_info, props)) {
+        // we need these flags to use `write_memory`
+        const auto desired = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        if (auto ec = create_memory(buffers[0], memory, buffer_info, desired,
+                                    props)) {
             vkDestroyBuffer(device, buffers[0], nullptr);
             throw vulkan_exception_t{ec, "vkAllocateMemory"};
         }
-        if (auto ec = update(buffers[0], memory)) {
+        if (auto ec = write_memory(buffers[0], memory)) {
             vkFreeMemory(device, memory, nullptr);
             vkDestroyBuffer(device, buffers[0], nullptr);
             throw vulkan_exception_t{ec, "vkBindBufferMemory || vkMapMemory"};
@@ -328,6 +336,21 @@ struct input1_t : vulkan_pipeline_input_t {
     ~input1_t() noexcept {
         vkFreeMemory(device, memory, nullptr);
         vkDestroyBuffer(device, buffers[0], nullptr);
+    }
+
+    void setup_shader_stage(
+        VkPipelineShaderStageCreateInfo (&stage)[2]) noexcept(false) override {
+        stage[0].sType = stage[1].sType =
+            VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stage[0].pName = stage[1].pName = "main";
+        // for vertex shader
+        stage[0].pSpecializationInfo = nullptr;
+        stage[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+        stage[0].module = vert.handle;
+        // for fragment shader
+        stage[1].pSpecializationInfo = nullptr;
+        stage[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        stage[1].module = frag.handle;
     }
 
     static void make_input_description(
@@ -370,6 +393,7 @@ struct input1_t : vulkan_pipeline_input_t {
     }
     VkResult create_memory(VkBuffer buffer, VkDeviceMemory& memory,
                            const VkBufferCreateInfo& buffer_info,
+                           VkFlags desired,
                            const VkPhysicalDeviceMemoryProperties& props) const
         noexcept {
         VkMemoryRequirements requirements{};
@@ -381,8 +405,6 @@ struct input1_t : vulkan_pipeline_input_t {
             // match type?
             const auto typebit = (1 << i);
             if (requirements.memoryTypeBits & typebit) {
-                const auto desired = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
                 // match prop?
                 const auto mtype = props.memoryTypes[i];
                 if ((mtype.propertyFlags & desired) == desired)
@@ -392,7 +414,9 @@ struct input1_t : vulkan_pipeline_input_t {
         return vkAllocateMemory(device, &info, nullptr, &memory);
     }
 
-    VkResult update(VkBuffer buffer, VkDeviceMemory memory) const noexcept {
+    /// @todo https://vulkan-tutorial.com/en/Vertex_buffers/Staging_buffer
+    VkResult write_memory(VkBuffer buffer, VkDeviceMemory memory) const
+        noexcept {
         constexpr auto offset = 0;
         if (auto ec = vkBindBufferMemory(device, buffer, memory, offset))
             return ec;
@@ -426,6 +450,5 @@ struct input1_t : vulkan_pipeline_input_t {
 auto make_pipeline_input(VkDevice device,
                          const VkPhysicalDeviceMemoryProperties& props)
     -> std::unique_ptr<vulkan_pipeline_input_t> {
-
     return std::make_unique<input1_t>(device, props);
 }
