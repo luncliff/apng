@@ -6,9 +6,11 @@
  * @see     https://gpuopen.com/learn/understanding-vulkan-objects/
  */
 #pragma once
+#include <filesystem>
 #include <gsl/gsl>
-#include <service.hpp>
 #include <vulkan/vulkan.h>
+
+namespace fs = std::filesystem;
 
 using fn_get_extensions_t = const char** (*)(uint32_t*);
 
@@ -35,7 +37,7 @@ class vulkan_instance_t final {
     ~vulkan_instance_t() noexcept;
 };
 
-VkResult get_physical_deivce(VkInstance instance,
+VkResult get_physical_device(VkInstance instance,
                              VkPhysicalDevice& physical_device) noexcept;
 
 uint32_t get_graphics_queue_available(VkQueueFamilyProperties* properties,
@@ -96,20 +98,7 @@ struct vulkan_pipeline_t final {
   public:
     static void setup_shader_stage(VkPipelineShaderStageCreateInfo (&stage)[2],
                                    VkShaderModule vert,
-                                   VkShaderModule frag) noexcept {
-        // for vertex shader
-        stage[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        stage[0].pSpecializationInfo = nullptr;
-        stage[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-        stage[0].module = vert;
-        // for fragment shader
-        stage[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        stage[1].pSpecializationInfo = nullptr;
-        stage[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        stage[1].module = frag;
-        // default entry point: "main"
-        stage[0].pName = stage[1].pName = "main";
-    }
+                                   VkShaderModule frag) noexcept;
     static void setup_vertex_input_state(
         VkPipelineVertexInputStateCreateInfo& info) noexcept;
     static void
@@ -208,3 +197,7 @@ struct vulkan_fence_t final {
     vulkan_fence_t(VkDevice _device) noexcept(false);
     ~vulkan_fence_t() noexcept;
 };
+
+auto open(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)>;
+auto read(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]>;
+auto read_all(const fs::path& p, size_t& fsize) -> std::unique_ptr<std::byte[]>;

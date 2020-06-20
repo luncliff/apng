@@ -1,4 +1,6 @@
-#include "service.hpp"
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 using namespace std;
 
@@ -70,7 +72,7 @@ auto read(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]> {
         rsz += fread(b, sizeof(byte), sz, stream);
         if (auto ec = ferror(stream))
             throw system_error{ec, system_category(), "fread"};
-        if (rsz == info.st_size)
+        if (rsz == static_cast<size_t>(info.st_size))
             break;
     }
     return blob;

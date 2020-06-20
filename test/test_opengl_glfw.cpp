@@ -1,9 +1,8 @@
-#define CATCH_CONFIG_FAST_COMPILE
+
 #include <catch2/catch.hpp>
 #include <filesystem>
 
 #include "programs.h"
-#include "service.hpp"
 
 #define GLFW_INCLUDE_GLEXT
 #define GLFW_INCLUDE_ES3
@@ -11,7 +10,9 @@
 
 namespace fs = std::filesystem;
 
-auto create_window(gsl::czstring<> window_name) noexcept
+auto create(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)>;
+
+auto create_opengl_window(gsl::czstring<> window_name) noexcept
     -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>;
 auto start_opengl_test() {
     REQUIRE(glfwInit());
@@ -20,7 +21,7 @@ auto start_opengl_test() {
 
 TEST_CASE("GLFW Window", "[opengl]") {
     auto on_return = start_opengl_test();
-    auto window = create_window("window0");
+    auto window = create_opengl_window("window0");
     if (window == nullptr) {
         const char* message = nullptr;
         glfwGetError(&message);
@@ -52,7 +53,7 @@ TEST_CASE("GLFW Window", "[opengl]") {
 
 TEST_CASE("window - texture2d_renderer_t", "[opengl]") {
     auto on_return = start_opengl_test();
-    auto window = create_window("window1");
+    auto window = create_opengl_window("window1");
     if (window == nullptr) {
         const char* message = nullptr;
         glfwGetError(&message);
@@ -124,14 +125,19 @@ TEST_CASE("offscreen - texture2d_renderer_t", "[opengl]") {
     }
 }
 
-void configure_glfw() noexcept {
+/**
+ * @see https://www.glfw.org/docs/latest/window_guide.html#GLFW_CONTEXT_CREATION_API_hint
+ */
+auto create_opengl_window(gsl::czstring<> window_name) noexcept
+    -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)> {
 #if defined(__APPLE__)
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
     glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // 3.2 Core
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-#elif defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
+#elif defined(_WIN32)
+#if defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
     glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
 #if defined(GLFW_INCLUDE_ES2)
@@ -141,14 +147,8 @@ void configure_glfw() noexcept {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // ES 3.1
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
 #endif
-#endif
-}
-/**
- * @see https://www.glfw.org/docs/latest/window_guide.html#GLFW_CONTEXT_CREATION_API_hint
- */
-auto create_window(gsl::czstring<> window_name) noexcept
-    -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)> {
-    configure_glfw();
+#endif // defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
+#endif // __APPLE__ || _WIN32
     return std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>{
         glfwCreateWindow(160 * 5, 160 * 5, //
                          window_name,      //

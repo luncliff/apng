@@ -4,7 +4,7 @@
  * @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLSyncControlTest.cpp
  * @see https://github.com/google/angle/blob/master/util/windows/win32/Win32Window.cpp 
  */
-#define CATCH_CONFIG_FAST_COMPILE
+
 #include <catch2/catch.hpp>
 #include <string_view>
 

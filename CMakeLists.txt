@@ -11,8 +11,6 @@ set(CMAKE_VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17134.0")
 add_library(graphics
     src/main.cpp
     src/vulkan.cpp
-    include/service.hpp
-    src/service.cpp
 )
 
 target_include_directories(graphics
@@ -74,30 +72,18 @@ if(WIN32)
     PROPERTIES
         WINDOWS_EXPORT_ALL_SYMBOLS True
     )
-    target_sources(graphics
-    PRIVATE
-        src/service_windows.cpp
-    )
     target_link_libraries(graphics
     PUBLIC
         kernel32 synchronization
     )
 
 elseif(APPLE)
-    target_sources(graphics
-    PRIVATE
-        src/service_posix.cpp
-    )
     target_link_libraries(graphics
     PUBLIC
         c++
     )
 
 else()
-    target_sources(graphics
-    PRIVATE
-        src/service_posix.cpp
-    )
     target_link_libraries(graphics
     PUBLIC
         c++ m
@@ -146,12 +132,12 @@ add_custom_target(compile_shaders_glsl
 target_sources(graphics
 PRIVATE
     src/opengl.h    src/opengl.cpp
-    src/opengl_es.h src/opengl_es.cpp
     src/programs.h  src/programs.cpp
 )
 if(WIN32)
     target_sources(graphics
     PRIVATE
+        src/opengl_es.h src/opengl_es.cpp
         src/opengl_windows.cpp
     )
     find_package(unofficial-angle   CONFIG REQUIRED)
@@ -212,8 +198,6 @@ find_package(Catch2 CONFIG REQUIRED)
 
 add_executable(graphics_test_suite
     test/test_main.cpp
-    test/test_message_queue.cpp
-    test/test_async_service.cpp
     test/test_vulkan_glfw.cpp
 )
 add_dependencies(graphics_test_suite

@@ -1,7 +1,6 @@
-#define CATCH_CONFIG_FAST_COMPILE
 #include <catch2/catch.hpp>
-#include <gsl/gsl>
 
+#include <gsl/gsl>
 #include <iostream>
 
 #include <EGL/egl.h>

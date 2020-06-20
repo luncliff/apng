@@ -4,17 +4,17 @@
 
 using namespace std;
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL
-on_debug_message(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-                 VkDebugUtilsMessageTypeFlagsEXT mtype,
-                 const VkDebugUtilsMessengerCallbackDataEXT* mdata, //
-                 void* user_data) {
-    switch (severity) {
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-    default:
-        return VK_FALSE;
-    }
-}
+// static VKAPI_ATTR VkBool32 VKAPI_CALL
+// on_debug_message(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+//                  VkDebugUtilsMessageTypeFlagsEXT mtype,
+//                  const VkDebugUtilsMessengerCallbackDataEXT* mdata, //
+//                  void* user_data) {
+//     switch (severity) {
+//     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+//     default:
+//         return VK_FALSE;
+//     }
+// }
 
 vulkan_instance_t::vulkan_instance_t(
     gsl::czstring<> id, fn_get_extensions_t fextensions) noexcept(false) {
@@ -70,7 +70,7 @@ vulkan_instance_t::~vulkan_instance_t() noexcept {
     vkDestroyInstance(handle, nullptr);
 }
 
-VkResult get_physical_deivce(VkInstance instance,
+VkResult get_physical_device(VkInstance instance,
                              VkPhysicalDevice& physical_device) noexcept {
     uint32_t count = 0;
     if (auto ec = vkEnumeratePhysicalDevices(instance, &count, nullptr))
@@ -281,6 +281,22 @@ vulkan_pipeline_t::~vulkan_pipeline_t() noexcept {
     vkDestroyPipeline(device, handle, nullptr);
 }
 
+void vulkan_pipeline_t::setup_shader_stage(
+    VkPipelineShaderStageCreateInfo (&stage)[2], VkShaderModule vert,
+    VkShaderModule frag) noexcept {
+    stage[0].sType = stage[1].sType =
+        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stage[0].pName = stage[1].pName = "main";
+    // for vertex shader
+    stage[0].pSpecializationInfo = nullptr;
+    stage[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    stage[0].module = vert;
+    // for fragment shader
+    stage[1].pSpecializationInfo = nullptr;
+    stage[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    stage[1].module = frag;
+}
+
 void vulkan_pipeline_t::setup_vertex_input_state(
     VkPipelineVertexInputStateCreateInfo& info) noexcept {
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -460,7 +476,7 @@ vulkan_swapchain_t::vulkan_swapchain_t(
         throw vulkan_exception_t{ec, "vkCreateSwapchainKHR"};
 }
 
-vulkan_swapchain_t::~vulkan_swapchain_t() {
+vulkan_swapchain_t::~vulkan_swapchain_t() noexcept {
     vkDestroySwapchainKHR(device, handle, nullptr);
 }
 
