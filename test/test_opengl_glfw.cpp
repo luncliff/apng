@@ -19,7 +19,7 @@ auto start_opengl_test() {
     return gsl::finally(&glfwTerminate);
 }
 
-TEST_CASE("GLFW Window", "[opengl]") {
+TEST_CASE("GLFW Window", "[opengl][glfw]") {
     auto on_return = start_opengl_test();
     auto window = create_opengl_window("window0");
     if (window == nullptr) {
@@ -51,7 +51,7 @@ TEST_CASE("GLFW Window", "[opengl]") {
     }
 }
 
-TEST_CASE("window - texture2d_renderer_t", "[opengl]") {
+TEST_CASE("window - texture2d_renderer_t", "[opengl][glfw]") {
     auto on_return = start_opengl_test();
     auto window = create_opengl_window("window1");
     if (window == nullptr) {
@@ -91,7 +91,7 @@ uint32_t create(const fs::path& fpath, void* blob, size_t blob_size) {
     return 0;
 };
 
-TEST_CASE("offscreen - texture2d_renderer_t", "[opengl]") {
+TEST_CASE("offscreen - texture2d_renderer_t", "[opengl][glfw]") {
     std::string message{};
     uint32_t ec = 0;
     auto context = make_offscreen_context(ec, message);

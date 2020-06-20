@@ -54,6 +54,14 @@ VkResult make_device(VkPhysicalDevice physical_device, VkSurfaceKHR surface,
                      uint32_t& graphics_index, uint32_t& present_index,
                      float priority = 0.012f) noexcept;
 
+VkResult check_surface_format(VkPhysicalDevice device, VkSurfaceKHR surface,
+                              VkFormat surface_format,
+                              VkColorSpaceKHR surface_color_space,
+                              bool& suitable) noexcept;
+VkResult check_present_mode(VkPhysicalDevice device, VkSurfaceKHR surface,
+                            const VkPresentModeKHR present_mode,
+                            bool& suitable) noexcept;
+
 struct vulkan_renderpass_t final {
     const VkDevice device{};
     VkRenderPass handle{};
@@ -72,7 +80,16 @@ struct vulkan_renderpass_t final {
                                        VkFormat surface_format) noexcept;
 };
 
-// shader stage creation
+class vulkan_pipeline_input_t {
+  public:
+    virtual ~vulkan_pipeline_input_t() noexcept = default;
+
+    virtual void setup_vertex_input_state(
+        VkPipelineVertexInputStateCreateInfo& info) noexcept = 0;
+    virtual void record(VkPipeline pipeline,
+                        VkCommandBuffer commands) noexcept = 0;
+};
+
 struct vulkan_pipeline_t final {
     const VkDevice device{};
     VkPipeline handle{};
@@ -90,9 +107,15 @@ struct vulkan_pipeline_t final {
     VkPipelineDepthStencilStateCreateInfo depth_stencil_state{};
 
   public:
+    [[deprecated]] vulkan_pipeline_t(const vulkan_renderpass_t& renderpass,
+                                     VkSurfaceCapabilitiesKHR& capabilities, //
+                                     VkShaderModule vert,
+                                     VkShaderModule frag) noexcept(false);
     vulkan_pipeline_t(const vulkan_renderpass_t& renderpass,
                       VkSurfaceCapabilitiesKHR& capabilities, //
+                      vulkan_pipeline_input_t& input,         //
                       VkShaderModule vert, VkShaderModule frag) noexcept(false);
+
     ~vulkan_pipeline_t() noexcept;
 
   public:
@@ -117,14 +140,6 @@ struct vulkan_pipeline_t final {
     static VkResult make_pipeline_layout(VkDevice device,
                                          VkPipelineLayout& layout) noexcept;
 };
-
-VkResult check_surface_format(VkPhysicalDevice device, VkSurfaceKHR surface,
-                              VkFormat surface_format,
-                              VkColorSpaceKHR surface_color_space,
-                              bool& suitable) noexcept;
-VkResult check_present_mode(VkPhysicalDevice device, VkSurfaceKHR surface,
-                            const VkPresentModeKHR present_mode,
-                            bool& suitable) noexcept;
 
 struct vulkan_shader_module_t final {
     const VkDevice device{};

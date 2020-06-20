@@ -237,6 +237,48 @@ void vulkan_renderpass_t::setup_color_attachment(
 
 vulkan_pipeline_t::vulkan_pipeline_t(const vulkan_renderpass_t& renderpass,
                                      VkSurfaceCapabilitiesKHR& capabilities, //
+                                     vulkan_pipeline_input_t& input,         //
+                                     VkShaderModule vert,
+                                     VkShaderModule frag) noexcept(false)
+    : device{renderpass.device} {
+    setup_shader_stage(shader_stages, vert, frag);
+    input.setup_vertex_input_state(vertex_input_state);
+    setup_input_assembly(input_assembly);
+    setup_viewport_scissor(capabilities, viewport_state, viewport, scissor);
+    setup_rasterization_state(rasterization);
+    setup_multi_sample_state(multisample);
+    setup_color_blend_state(color_blend_attachment, color_blend_state);
+    // setup_depth_stencil_state(depth_stencil_state)
+
+    VkGraphicsPipelineCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    info.stageCount = 2;
+    info.pStages = shader_stages;
+    info.pVertexInputState = &vertex_input_state;
+    info.pInputAssemblyState = &input_assembly;
+    info.pViewportState = &viewport_state;
+    info.pRasterizationState = &rasterization;
+    info.pMultisampleState = &multisample;
+    info.pDepthStencilState = nullptr;
+    info.pColorBlendState = &color_blend_state;
+    info.pDynamicState = nullptr;
+    if (auto ec = make_pipeline_layout(device, layout))
+        throw vulkan_exception_t{ec, "vkCreatePipelineLayout"};
+    info.layout = layout;
+    info.renderPass = renderpass.handle;
+    info.subpass = 0;
+    // ...
+    info.basePipelineHandle = VK_NULL_HANDLE;
+    info.basePipelineIndex = -1;
+    if (auto ec = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info,
+                                            nullptr, &handle)) {
+        vkDestroyPipelineLayout(device, layout, nullptr);
+        throw vulkan_exception_t{ec, "vkCreateGraphicsPipelines"};
+    }
+}
+
+vulkan_pipeline_t::vulkan_pipeline_t(const vulkan_renderpass_t& renderpass,
+                                     VkSurfaceCapabilitiesKHR& capabilities, //
                                      VkShaderModule vert,
                                      VkShaderModule frag) noexcept(false)
     : device{renderpass.device} {

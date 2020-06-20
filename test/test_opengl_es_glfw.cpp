@@ -5,7 +5,7 @@
 #include <type_traits>
 
 #if defined(_WIN32)
-#define GLFW_INCLUDE_ES2
+#define GLFW_INCLUDE_ES3
 #endif
 #define GLFW_INCLUDE_GLEXT
 #include <GLFW/glfw3.h>
@@ -33,7 +33,7 @@ class gfx_program_t {
 
 auto create_tex2d_program() -> unique_ptr<gfx_program_t>;
 
-TEST_CASE("GLFW + OpenGL ES", "[opengl]") {
+TEST_CASE("GLFW + OpenGL ES", "[opengl][glfw]") {
     auto window = create_opengl_window("OpenGL ES");
     if (window == nullptr) {
         const char* message = nullptr;
@@ -78,7 +78,7 @@ void run_program(GLFWwindow* window, EGLContext context, //
     }
 }
 
-TEST_CASE("tex2d_renderer_t", "[opengl]") {
+TEST_CASE("tex2d_renderer_t", "[opengl][glfw]") {
     auto window = create_opengl_window("OpenGL ES");
     if (window == nullptr) {
         const char* message = nullptr;
