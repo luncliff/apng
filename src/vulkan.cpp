@@ -628,3 +628,61 @@ vulkan_fence_t::vulkan_fence_t(VkDevice _device) noexcept(false)
 vulkan_fence_t::~vulkan_fence_t() noexcept {
     vkDestroyFence(device, handle, nullptr);
 }
+
+VkResult create_vertex_buffer(VkDevice device, VkBuffer& buffer,
+                              VkBufferCreateInfo& info,
+                              uint32_t length) noexcept {
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    info.size = length;
+    info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    return vkCreateBuffer(device, &info, nullptr, &buffer);
+}
+VkResult create_index_buffer(VkDevice device, VkBuffer& buffer,
+                             VkBufferCreateInfo& info,
+                             uint32_t length) noexcept {
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    info.size = length;
+    info.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    return vkCreateBuffer(device, &info, nullptr, &buffer);
+}
+
+VkResult
+allocate_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory& memory,
+                const VkBufferCreateInfo& buffer_info, VkFlags desired,
+                const VkPhysicalDeviceMemoryProperties& props) noexcept {
+    VkMemoryRequirements requirements{};
+    vkGetBufferMemoryRequirements(device, buffer, &requirements);
+    VkMemoryAllocateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    info.allocationSize = requirements.size;
+    for (auto i = 0u; i < props.memoryTypeCount; ++i) {
+        // match type?
+        const auto typebit = (1 << i);
+        if (requirements.memoryTypeBits & typebit) {
+            // match prop?
+            const auto mtype = props.memoryTypes[i];
+            if ((mtype.propertyFlags & desired) == desired)
+                info.memoryTypeIndex = i;
+        }
+    }
+    return vkAllocateMemory(device, &info, nullptr, &memory);
+}
+
+VkResult write_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory,
+                      const void* data) noexcept {
+    constexpr auto offset = 0;
+    if (auto ec = vkBindBufferMemory(device, buffer, memory, offset))
+        return ec;
+    VkMemoryRequirements requirements{};
+    vkGetBufferMemoryRequirements(device, buffer, &requirements);
+    const auto flags = VkMemoryMapFlags{};
+    void* dst = nullptr;
+    if (auto ec = vkMapMemory(device, memory, offset, requirements.size, //
+                              flags, &dst))
+        return ec;
+    memcpy(dst, data, requirements.size);
+    vkUnmapMemory(device, memory);
+    return VK_SUCCESS;
+}

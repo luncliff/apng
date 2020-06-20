@@ -10,7 +10,10 @@ set(CMAKE_VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17134.0")
 
 add_library(graphics
     src/main.cpp
+    include/graphics.h
     src/vulkan.cpp
+    src/vulkan_1.cpp
+    src/vulkan_2.cpp
 )
 
 target_include_directories(graphics

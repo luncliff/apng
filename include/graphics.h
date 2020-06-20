@@ -72,6 +72,22 @@ VkResult check_present_mode(VkPhysicalDevice device, VkSurfaceKHR surface,
  * @todo Create a new `VkDevice` with GFX, Present, Transfer queue
  */
 
+VkResult create_vertex_buffer(VkDevice device, VkBuffer& buffer,
+                              VkBufferCreateInfo& info,
+                              uint32_t length) noexcept;
+VkResult create_index_buffer(VkDevice device, VkBuffer& buffer,
+                             VkBufferCreateInfo& info,
+                             uint32_t length) noexcept;
+
+VkResult
+allocate_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory& memory,
+                const VkBufferCreateInfo& buffer_info, VkFlags desired,
+                const VkPhysicalDeviceMemoryProperties& props) noexcept;
+
+/// @todo https://vulkan-tutorial.com/en/Vertex_buffers/Staging_buffer
+VkResult write_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory,
+                      const void* data) noexcept;
+
 struct vulkan_renderpass_t final {
     const VkDevice device{};
     VkRenderPass handle{};
