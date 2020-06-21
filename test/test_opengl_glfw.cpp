@@ -12,12 +12,9 @@ namespace fs = std::filesystem;
 
 auto create(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)>;
 
+auto start_opengl_test() -> gsl::final_action<void (*)()>;
 auto create_opengl_window(gsl::czstring<> window_name) noexcept
     -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>;
-auto start_opengl_test() {
-    REQUIRE(glfwInit());
-    return gsl::finally(&glfwTerminate);
-}
 
 TEST_CASE("GLFW Window", "[opengl][glfw]") {
     auto on_return = start_opengl_test();
@@ -123,6 +120,11 @@ TEST_CASE("offscreen - texture2d_renderer_t", "[opengl][glfw]") {
         REQUIRE(fb.read_pixels(w, h, buf.get()) == GL_NO_ERROR);
         REQUIRE(create("offscreen_1.bin", buf.get(), w * h * 4) == 0);
     }
+}
+
+auto start_opengl_test() -> gsl::final_action<void (*)()> {
+    REQUIRE(glfwInit());
+    return gsl::finally(&glfwTerminate);
 }
 
 /**

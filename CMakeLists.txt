@@ -6,7 +6,7 @@ if(NOT ${CMAKE_TOOLCHAIN_FILE} MATCHES vcpkg.cmake)
 endif()
 message(STATUS "using vcpkg: ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
 
-set(CMAKE_VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17134.0")
+set(CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION "10.0.17134.0")
 
 add_library(graphics
     src/main.cpp

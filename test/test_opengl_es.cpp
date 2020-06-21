@@ -6,6 +6,8 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 
+using namespace std;
+
 TEST_CASE("eglQueryString", "[egl]") {
     // eglQueryString returns static, zero-terminated string
     SECTION("EGL_EXTENSIONS") {
@@ -13,12 +15,13 @@ TEST_CASE("eglQueryString", "[egl]") {
         REQUIRE(txt);
         const auto txtlen = strlen(txt);
 
+        cout << "EGL_EXTENSIONS" << endl;
         auto offset = 0;
         for (auto i = 0u; i < txtlen; ++i) {
             if (isspace(txt[i]) == false)
                 continue;
-            const auto extname = std::string_view{txt + offset, i - offset};
-            std::cout << extname << std::endl;
+            const auto extname = string_view{txt + offset, i - offset};
+            cout << "  " << extname << endl;
             offset = ++i;
         }
     }

@@ -117,7 +117,7 @@ struct input1_t : vulkan_pipeline_input_t {
     }
     VkResult write_memory(VkBuffer buffer, VkDeviceMemory memory) const
         noexcept {
-        return ::write_memory(device, buffer, memory, vertices.data());
+        return ::initialize_memory(device, buffer, memory, vertices.data());
     }
 
     void record(VkPipeline pipeline,

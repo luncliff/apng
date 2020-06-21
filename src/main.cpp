@@ -22,20 +22,19 @@ auto open(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)> {
     return {fp, &fclose};
 }
 
-auto read(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]> {
+auto read_all(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]> {
     struct _stat64 info {};
     if (_fstat64(_fileno(stream), &info) != 0)
         throw system_error{errno, system_category(), "_fstat64"};
-    //rsz = info.st_size;
     auto blob = make_unique<std::byte[]>(info.st_size);
     rsz = 0;
     while (!feof(stream)) {
-        auto b = blob.get() + rsz;
+        void* b = blob.get() + rsz;
         const auto sz = info.st_size - rsz;
         rsz += fread_s(b, sz, sizeof(std::byte), sz, stream);
         if (auto ec = ferror(stream))
             throw system_error{ec, system_category(), "fread_s"};
-        if (rsz == info.st_size)
+        if (rsz == static_cast<size_t>(info.st_size))
             break;
     }
     return blob;
@@ -60,14 +59,14 @@ auto open(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)> {
     return {fp, &fclose};
 }
 
-auto read(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]> {
+auto read_all(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]> {
     struct stat info {};
     if (fstat(fileno(stream), &info) != 0)
         throw system_error{errno, system_category(), "fstat"};
     auto blob = make_unique<std::byte[]>(info.st_size);
     rsz = 0;
     while (!feof(stream)) {
-        auto b = blob.get() + rsz;
+        void* b = blob.get() + rsz;
         const auto sz = info.st_size - rsz;
         rsz += fread(b, sizeof(byte), sz, stream);
         if (auto ec = ferror(stream))
@@ -82,5 +81,5 @@ auto read(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]> {
 auto read_all(const fs::path& p, size_t& fsize)
     -> std::unique_ptr<std::byte[]> {
     auto fin = open(p);
-    return read(fin.get(), fsize);
+    return read_all(fin.get(), fsize);
 }

@@ -670,11 +670,26 @@ allocate_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory& memory,
     return vkAllocateMemory(device, &info, nullptr, &memory);
 }
 
-VkResult write_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory,
-                      const void* data) noexcept {
+VkResult initialize_memory(VkDevice device, VkBuffer buffer,
+                           VkDeviceMemory memory, const void* data) noexcept {
     constexpr auto offset = 0;
     if (auto ec = vkBindBufferMemory(device, buffer, memory, offset))
         return ec;
+    VkMemoryRequirements requirements{};
+    vkGetBufferMemoryRequirements(device, buffer, &requirements);
+    const auto flags = VkMemoryMapFlags{};
+    void* dst = nullptr;
+    if (auto ec = vkMapMemory(device, memory, offset, requirements.size, //
+                              flags, &dst))
+        return ec;
+    memcpy(dst, data, requirements.size);
+    vkUnmapMemory(device, memory);
+    return VK_SUCCESS;
+}
+
+VkResult write_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory,
+                      const void* data) noexcept {
+    constexpr auto offset = 0;
     VkMemoryRequirements requirements{};
     vkGetBufferMemoryRequirements(device, buffer, &requirements);
     const auto flags = VkMemoryMapFlags{};

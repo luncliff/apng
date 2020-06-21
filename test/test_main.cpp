@@ -103,7 +103,7 @@ TEST_CASE("Vulkan PhysicalDevice", "[vulkan]") {
                     VK_SUCCESS);
             for_each(extensions.get(), extensions.get() + num_extension,
                      [](const VkExtensionProperties& ext) {
-                         fprintf(stdout, "  - %*s\n",
+                         fprintf(stdout, "  %*s\n",
                                  strnlen(ext.extensionName,
                                          VK_MAX_EXTENSION_NAME_SIZE),
                                  ext.extensionName);

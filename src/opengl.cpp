@@ -183,7 +183,7 @@ class opengl_error_category_t final : public error_category {
     }
 };
 
+opengl_error_category_t cat{};
 error_category& get_opengl_category() noexcept {
-    static opengl_error_category_t cat{};
     return cat;
 };

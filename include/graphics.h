@@ -85,6 +85,11 @@ allocate_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory& memory,
                 const VkPhysicalDeviceMemoryProperties& props) noexcept;
 
 /// @todo https://vulkan-tutorial.com/en/Vertex_buffers/Staging_buffer
+/// @see vkBindBufferMemory
+/// @see vkMapMemory
+VkResult initialize_memory(VkDevice device, VkBuffer buffer,
+                           VkDeviceMemory memory, const void* data) noexcept;
+/// @see vkMapMemory
 VkResult write_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory,
                       const void* data) noexcept;
 

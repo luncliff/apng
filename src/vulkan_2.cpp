@@ -61,7 +61,7 @@ struct input2_t : vulkan_pipeline_input_t {
         if (auto ec = allocate_memory(device, buffers[vidx], memories[vidx],
                                       buffer_info, desired, props))
             throw vulkan_exception_t{ec, "vkAllocateMemory"};
-        if (auto ec = write_memory(device, buffers[vidx], memories[vidx],
+        if (auto ec = initialize_memory(device, buffers[vidx], memories[vidx],
                                    vertices.data()))
             throw vulkan_exception_t{ec, "vkBindBufferMemory || vkMapMemory"};
         // indices
@@ -73,7 +73,7 @@ struct input2_t : vulkan_pipeline_input_t {
         if (auto ec = allocate_memory(device, buffers[iidx], memories[iidx],
                                       buffer_info, desired, props))
             throw vulkan_exception_t{ec, "vkAllocateMemory"};
-        if (auto ec = write_memory(device, buffers[iidx], memories[iidx],
+        if (auto ec = initialize_memory(device, buffers[iidx], memories[iidx],
                                    indices.data()))
             throw vulkan_exception_t{ec, "vkBindBufferMemory || vkMapMemory"};
     }

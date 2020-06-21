@@ -15,6 +15,7 @@
 
 using namespace std;
 
+auto start_opengl_test() -> gsl::final_action<void (*)()>;
 auto create_opengl_window(gsl::czstring<> window_name) noexcept
     -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>;
 
@@ -34,6 +35,7 @@ class gfx_program_t {
 auto create_tex2d_program() -> unique_ptr<gfx_program_t>;
 
 TEST_CASE("GLFW + OpenGL ES", "[opengl][glfw]") {
+    auto on_return = start_opengl_test();
     auto window = create_opengl_window("OpenGL ES");
     if (window == nullptr) {
         const char* message = nullptr;
@@ -79,6 +81,7 @@ void run_program(GLFWwindow* window, EGLContext context, //
 }
 
 TEST_CASE("tex2d_renderer_t", "[opengl][glfw]") {
+    auto on_return = start_opengl_test();
     auto window = create_opengl_window("OpenGL ES");
     if (window == nullptr) {
         const char* message = nullptr;
