@@ -1,4 +1,4 @@
-#include "graphics.h"
+#include "vulkan_1.h"
 
 #include <vector>
 
@@ -16,52 +16,25 @@ using namespace std;
 //     }
 // }
 
-vulkan_instance_t::vulkan_instance_t(
-    gsl::czstring<> id, fn_get_extensions_t fextensions) noexcept(false) {
+vulkan_instance_t::vulkan_instance_t(gsl::czstring<> _name,               //
+                                     gsl::span<const char* const> layers, //
+                                     gsl::span<const char* const> extensions) noexcept(false)
+    : name{_name} {
     info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    info.pApplicationName = id;
-    info.applicationVersion = 0x00'02;
-    info.pEngineName = __func__;
-    info.engineVersion = VK_API_VERSION_1_2;
-    info.apiVersion = VK_API_VERSION_1_2;
-
+    info.pApplicationName = name.c_str();
+    info.applicationVersion = 0x00'03;
+    info.apiVersion = VK_API_VERSION_1_2; // highest required
+    info.pEngineName = nullptr;
+    info.engineVersion = VK_API_VERSION_1_2; // used to create
     VkInstanceCreateInfo request{};
     request.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     request.pApplicationInfo = &info;
-    vector<gsl::czstring<>> extensions{};
-    if (fextensions) {
-        uint32_t count = 0;
-        const char** names = fextensions(&count);
-        for (auto i = 0u; i < count; ++i) {
-            extensions.emplace_back(names[i]);
-        }
-        // extensions.emplace_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-        request.enabledExtensionCount =
-            static_cast<uint32_t>(extensions.size());
+    request.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+    if (request.enabledExtensionCount > 0)
         request.ppEnabledExtensionNames = extensions.data();
-    }
-    vector<gsl::czstring<>> names{};
-    {
-        uint32_t count = 0;
-        if (auto ec = vkEnumerateInstanceLayerProperties(&count, nullptr))
-            throw vulkan_exception_t{ec, "vkEnumerateInstanceLayerProperties"};
-        layers = make_unique<VkLayerProperties[]>(count);
-        if (auto ec = vkEnumerateInstanceLayerProperties(&count, layers.get()))
-            throw vulkan_exception_t{ec, "vkEnumerateInstanceLayerProperties"};
-        for (auto i = 0u; i < count; ++i) {
-            using namespace string_view_literals;
-            const auto& layer = layers[i];
-            if ("VK_LAYER_KHRONOS_validation"sv == layer.layerName) {
-                names.emplace_back(layer.layerName);
-            }
-        }
-    }
-    if (names.size()) {
-        /// @todo: change to parameter
-        /// The validation layers will print debug messages to the standard output by default
-        request.ppEnabledLayerNames = names.data();
-        request.enabledLayerCount = gsl::narrow_cast<uint32_t>(names.size());
-    }
+    request.enabledLayerCount = static_cast<uint32_t>(layers.size());
+    if (request.enabledLayerCount > 0)
+        request.ppEnabledLayerNames = layers.data();
     if (auto ec = vkCreateInstance(&request, nullptr, &handle))
         throw vulkan_exception_t{ec, "vkCreateInstance"};
 }
@@ -70,46 +43,38 @@ vulkan_instance_t::~vulkan_instance_t() noexcept {
     vkDestroyInstance(handle, nullptr);
 }
 
-VkResult get_physical_device(VkInstance instance,
-                             VkPhysicalDevice& physical_device) noexcept {
+VkResult get_physical_device(VkInstance instance, VkPhysicalDevice& handle) noexcept {
     uint32_t count = 0;
     if (auto ec = vkEnumeratePhysicalDevices(instance, &count, nullptr))
         return ec;
-    physical_device = VK_NULL_HANDLE;
-    if (count == 0)
-        return VK_ERROR_DEVICE_LOST;
     auto devices = make_unique<VkPhysicalDevice[]>(count);
-    if (auto ec = vkEnumeratePhysicalDevices(instance, &count, devices.get()))
+    if (auto ec = vkEnumeratePhysicalDevices(instance, &count, devices.get())) {
+        handle = VK_NULL_HANDLE;
         return ec;
-    for (auto i = 0u; i < count; ++i) {
-        physical_device = devices[i];
-        break;
     }
+    handle = devices[count - 1];
     return VK_SUCCESS;
 }
 
-uint32_t get_graphics_queue_available(VkQueueFamilyProperties* properties,
-                                      uint32_t count) noexcept {
+uint32_t get_graphics_queue_available(VkQueueFamilyProperties* properties, uint32_t count) noexcept {
     for (auto i = 0u; i < count; ++i)
         if (properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
             return i;
     return static_cast<uint32_t>(-1);
 }
 
-VkResult make_device(VkPhysicalDevice physical_device, VkDevice& handle,
-                     uint32_t& queue_index, float priority) noexcept {
+VkResult make_device(VkPhysicalDevice physical_device, VkDevice& handle, uint32_t& queue_index,
+                     float priority) noexcept {
     uint32_t count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, nullptr);
     if (count == 0)
         return VK_ERROR_UNKNOWN;
     auto properties = make_unique<VkQueueFamilyProperties[]>(count);
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count,
-                                             properties.get());
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, properties.get());
     VkDeviceQueueCreateInfo queue_info{};
     queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
     queue_info.pQueuePriorities = &priority;
-    queue_index = queue_info.queueFamilyIndex =
-        get_graphics_queue_available(properties.get(), count);
+    queue_index = queue_info.queueFamilyIndex = get_graphics_queue_available(properties.get(), count);
     queue_info.queueCount = 1;
     // create a device
     VkDeviceCreateInfo info{};
@@ -123,8 +88,8 @@ VkResult make_device(VkPhysicalDevice physical_device, VkDevice& handle,
     return vkCreateDevice(physical_device, &info, nullptr, &handle);
 }
 
-uint32_t get_surface_support(VkPhysicalDevice device, VkSurfaceKHR surface,
-                             uint32_t count, uint32_t exclude_index) noexcept {
+uint32_t get_surface_support(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t count,
+                             uint32_t exclude_index) noexcept {
     for (auto i = 0u; i < count; ++i) {
         if (i == exclude_index)
             continue;
@@ -136,25 +101,20 @@ uint32_t get_surface_support(VkPhysicalDevice device, VkSurfaceKHR surface,
     return static_cast<uint32_t>(-1);
 }
 
-VkResult make_device(VkPhysicalDevice physical_device, VkSurfaceKHR surface,
+VkResult make_device(VkPhysicalDevice gpu, VkSurfaceKHR surface,
                      VkDevice& handle, //
-                     uint32_t& graphics_index, uint32_t& present_index,
-                     float priority) noexcept {
+                     uint32_t& graphics_index, uint32_t& present_index, float priority) noexcept {
     uint32_t count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, nullptr);
-    if (count == 0)
-        return VK_ERROR_UNKNOWN;
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &count, nullptr);
     auto properties = make_unique<VkQueueFamilyProperties[]>(count);
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count,
-                                             properties.get());
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &count, properties.get());
     VkDeviceQueueCreateInfo queues[2]{};
     {
         auto& gfx = queues[0];
         gfx.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         gfx.pQueuePriorities = &priority;
         gfx.queueCount = 1;
-        gfx.queueFamilyIndex =
-            get_graphics_queue_available(properties.get(), count);
+        gfx.queueFamilyIndex = get_graphics_queue_available(properties.get(), count);
         if (gfx.queueFamilyIndex > count)
             return VK_ERROR_UNKNOWN;
         graphics_index = gfx.queueFamilyIndex;
@@ -164,10 +124,9 @@ VkResult make_device(VkPhysicalDevice physical_device, VkSurfaceKHR surface,
         present.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         present.pQueuePriorities = &priority;
         present.queueCount = 1;
-        present.queueFamilyIndex = get_surface_support(
-            physical_device, surface, count,
-            // index of graphics/presentation queue must be different
-            queues[0].queueFamilyIndex);
+        present.queueFamilyIndex = get_surface_support(gpu, surface, count,
+                                                       // index of graphics/presentation queue must be different
+                                                       queues[0].queueFamilyIndex);
         if (present.queueFamilyIndex > count)
             return VK_ERROR_UNKNOWN;
         present_index = present.queueFamilyIndex;
@@ -184,16 +143,14 @@ VkResult make_device(VkPhysicalDevice physical_device, VkSurfaceKHR surface,
     info.queueCreateInfoCount = 2;
     VkPhysicalDeviceFeatures features{};
     info.pEnabledFeatures = &features;
-    return vkCreateDevice(physical_device, &info, nullptr, &handle);
+    return vkCreateDevice(gpu, &info, nullptr, &handle);
 }
 
-vulkan_renderpass_t::vulkan_renderpass_t(
-    VkDevice _device, VkFormat surface_format) noexcept(false)
-    : device{_device} {
+vulkan_renderpass_t::vulkan_renderpass_t(VkDevice _device, VkFormat surface_format) noexcept(false) : device{_device} {
     setup_color_attachment(colors, color_ref, surface_format);
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &color_ref;
+    subpasses[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpasses[0].colorAttachmentCount = 1;
+    subpasses[0].pColorAttachments = &color_ref;
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -206,7 +163,7 @@ vulkan_renderpass_t::vulkan_renderpass_t(
     info.attachmentCount = 1;
     info.pAttachments = &colors;
     info.subpassCount = 1;
-    info.pSubpasses = &subpass;
+    info.pSubpasses = subpasses;
     info.dependencyCount = 1;
     info.pDependencies = &dependency;
     if (auto ec = vkCreateRenderPass(device, &info, nullptr, &handle))
@@ -217,9 +174,8 @@ vulkan_renderpass_t::~vulkan_renderpass_t() noexcept {
     vkDestroyRenderPass(device, handle, nullptr);
 }
 
-void vulkan_renderpass_t::setup_color_attachment(
-    VkAttachmentDescription& colors, VkAttachmentReference& color_ref,
-    VkFormat surface_format) noexcept {
+void vulkan_renderpass_t::setup_color_attachment(VkAttachmentDescription& colors, VkAttachmentReference& color_ref,
+                                                 VkFormat surface_format) noexcept {
     colors.format = surface_format;
     colors.samples = VK_SAMPLE_COUNT_1_BIT;
     colors.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -235,20 +191,17 @@ void vulkan_renderpass_t::setup_color_attachment(
     color_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 }
 
-vulkan_pipeline_t::vulkan_pipeline_t(
-    const vulkan_renderpass_t& renderpass,
-    VkSurfaceCapabilitiesKHR& capabilities,
-    vulkan_pipeline_input_t& input) noexcept(false)
+vulkan_pipeline_t::vulkan_pipeline_t(const vulkan_renderpass_t& renderpass, VkExtent2D& extent,
+                                     vulkan_pipeline_input_t& input) noexcept(false)
     : device{renderpass.device} {
     input.setup_shader_stage(shader_stages);
     input.setup_vertex_input_state(vertex_input_state);
     setup_input_assembly(input_assembly);
-    setup_viewport_scissor(capabilities, viewport_state, viewport, scissor);
+    setup_viewport_scissor(extent, viewport_state, viewport, scissor);
     setup_rasterization_state(rasterization);
     setup_multi_sample_state(multisample);
     setup_color_blend_state(color_blend_attachment, color_blend_state);
     // setup_depth_stencil_state(depth_stencil_state)
-
     VkGraphicsPipelineCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     info.stageCount = 2;
@@ -269,49 +222,7 @@ vulkan_pipeline_t::vulkan_pipeline_t(
     // ...
     info.basePipelineHandle = VK_NULL_HANDLE;
     info.basePipelineIndex = -1;
-    if (auto ec = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info,
-                                            nullptr, &handle)) {
-        vkDestroyPipelineLayout(device, layout, nullptr);
-        throw vulkan_exception_t{ec, "vkCreateGraphicsPipelines"};
-    }
-}
-
-vulkan_pipeline_t::vulkan_pipeline_t(const vulkan_renderpass_t& renderpass,
-                                     VkSurfaceCapabilitiesKHR& capabilities, //
-                                     VkShaderModule vert,
-                                     VkShaderModule frag) noexcept(false)
-    : device{renderpass.device} {
-    setup_shader_stage(shader_stages, vert, frag);
-    setup_vertex_input_state(vertex_input_state);
-    setup_input_assembly(input_assembly);
-    setup_viewport_scissor(capabilities, viewport_state, viewport, scissor);
-    setup_rasterization_state(rasterization);
-    setup_multi_sample_state(multisample);
-    setup_color_blend_state(color_blend_attachment, color_blend_state);
-    // setup_depth_stencil_state(depth_stencil_state)
-
-    VkGraphicsPipelineCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    info.stageCount = 2;
-    info.pStages = shader_stages;
-    info.pVertexInputState = &vertex_input_state;
-    info.pInputAssemblyState = &input_assembly;
-    info.pViewportState = &viewport_state;
-    info.pRasterizationState = &rasterization;
-    info.pMultisampleState = &multisample;
-    info.pDepthStencilState = nullptr;
-    info.pColorBlendState = &color_blend_state;
-    info.pDynamicState = nullptr;
-    if (auto ec = make_pipeline_layout(device, layout))
-        throw vulkan_exception_t{ec, "vkCreatePipelineLayout"};
-    info.layout = layout;
-    info.renderPass = renderpass.handle;
-    info.subpass = 0;
-    // ...
-    info.basePipelineHandle = VK_NULL_HANDLE;
-    info.basePipelineIndex = -1;
-    if (auto ec = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info,
-                                            nullptr, &handle)) {
+    if (auto ec = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &handle)) {
         vkDestroyPipelineLayout(device, layout, nullptr);
         throw vulkan_exception_t{ec, "vkCreateGraphicsPipelines"};
     }
@@ -322,11 +233,9 @@ vulkan_pipeline_t::~vulkan_pipeline_t() noexcept {
     vkDestroyPipeline(device, handle, nullptr);
 }
 
-void vulkan_pipeline_t::setup_shader_stage(
-    VkPipelineShaderStageCreateInfo (&stage)[2], VkShaderModule vert,
-    VkShaderModule frag) noexcept {
-    stage[0].sType = stage[1].sType =
-        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+void vulkan_pipeline_t::setup_shader_stage(VkPipelineShaderStageCreateInfo (&stage)[2], VkShaderModule vert,
+                                           VkShaderModule frag) noexcept {
+    stage[0].sType = stage[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     stage[0].pName = stage[1].pName = "main";
     // for vertex shader
     stage[0].pSpecializationInfo = nullptr;
@@ -338,8 +247,7 @@ void vulkan_pipeline_t::setup_shader_stage(
     stage[1].module = frag;
 }
 
-void vulkan_pipeline_t::setup_vertex_input_state(
-    VkPipelineVertexInputStateCreateInfo& info) noexcept {
+void vulkan_pipeline_t::setup_vertex_input_state(VkPipelineVertexInputStateCreateInfo& info) noexcept {
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     if (info.vertexBindingDescriptionCount)
         info.pVertexBindingDescriptions = nullptr;
@@ -347,33 +255,29 @@ void vulkan_pipeline_t::setup_vertex_input_state(
         info.pVertexAttributeDescriptions = nullptr;
 }
 
-void vulkan_pipeline_t::setup_input_assembly(
-    VkPipelineInputAssemblyStateCreateInfo& info) noexcept {
+void vulkan_pipeline_t::setup_input_assembly(VkPipelineInputAssemblyStateCreateInfo& info) noexcept {
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     info.primitiveRestartEnable = VK_FALSE;
 }
 
-void vulkan_pipeline_t::setup_viewport_scissor(
-    const VkSurfaceCapabilitiesKHR& cap,
-    VkPipelineViewportStateCreateInfo& info, VkViewport& viewport,
-    VkRect2D& scissor) noexcept {
+void vulkan_pipeline_t::setup_viewport_scissor(const VkExtent2D& extent, VkPipelineViewportStateCreateInfo& info,
+                                               VkViewport& viewport, VkRect2D& scissor) noexcept {
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     viewport.x = viewport.y = 0.0f;
-    viewport.width = static_cast<float>(cap.maxImageExtent.width);
-    viewport.height = static_cast<float>(cap.maxImageExtent.height);
+    viewport.width = static_cast<float>(extent.width);
+    viewport.height = static_cast<float>(extent.height);
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
     scissor.offset = {0, 0};
-    scissor.extent = cap.maxImageExtent;
+    scissor.extent = extent;
     info.viewportCount = 1;
     info.pViewports = &viewport;
     info.scissorCount = 1;
     info.pScissors = &scissor;
 }
 
-void vulkan_pipeline_t::setup_rasterization_state(
-    VkPipelineRasterizationStateCreateInfo& info) noexcept {
+void vulkan_pipeline_t::setup_rasterization_state(VkPipelineRasterizationStateCreateInfo& info) noexcept {
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     info.depthClampEnable = VK_FALSE;
     info.rasterizerDiscardEnable = VK_FALSE;
@@ -387,8 +291,7 @@ void vulkan_pipeline_t::setup_rasterization_state(
     info.depthBiasSlopeFactor = 0.0f;
 }
 
-void vulkan_pipeline_t::setup_multi_sample_state(
-    VkPipelineMultisampleStateCreateInfo& info) noexcept {
+void vulkan_pipeline_t::setup_multi_sample_state(VkPipelineMultisampleStateCreateInfo& info) noexcept {
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     info.sampleShadingEnable = VK_FALSE;
     info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
@@ -398,12 +301,10 @@ void vulkan_pipeline_t::setup_multi_sample_state(
     info.alphaToOneEnable = VK_FALSE;
 }
 
-void vulkan_pipeline_t::setup_color_blend_state(
-    VkPipelineColorBlendAttachmentState& attachment,
-    VkPipelineColorBlendStateCreateInfo& info) noexcept {
+void vulkan_pipeline_t::setup_color_blend_state(VkPipelineColorBlendAttachmentState& attachment,
+                                                VkPipelineColorBlendStateCreateInfo& info) noexcept {
     attachment.colorWriteMask =
-        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     attachment.blendEnable = VK_TRUE;
     attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
     attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -418,9 +319,7 @@ void vulkan_pipeline_t::setup_color_blend_state(
     info.pAttachments = &attachment;
 }
 
-VkResult
-vulkan_pipeline_t::make_pipeline_layout(VkDevice device,
-                                        VkPipelineLayout& layout) noexcept {
+VkResult vulkan_pipeline_t::make_pipeline_layout(VkDevice device, VkPipelineLayout& layout) noexcept {
     VkPipelineLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     info.setLayoutCount = 0;
@@ -430,24 +329,18 @@ vulkan_pipeline_t::make_pipeline_layout(VkDevice device,
     return vkCreatePipelineLayout(device, &info, nullptr, &layout);
 }
 
-VkResult check_surface_format(VkPhysicalDevice device, VkSurfaceKHR surface,
-                              VkFormat surface_format,
-                              VkColorSpaceKHR surface_color_space,
-                              bool& suitable) noexcept {
+VkResult check_surface_format(VkPhysicalDevice device, VkSurfaceKHR surface, //
+                              VkFormat surface_format, VkColorSpaceKHR surface_color_space, bool& suitable) noexcept {
     uint32_t num_formats = 0;
-    if (auto ec = vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface,
-                                                       &num_formats, nullptr))
+    if (auto ec = vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &num_formats, nullptr))
         return ec;
     auto formats = make_unique<VkSurfaceFormatKHR[]>(num_formats);
-    if (auto ec = vkGetPhysicalDeviceSurfaceFormatsKHR(
-            device, surface, &num_formats, formats.get()))
+    if (auto ec = vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &num_formats, formats.get()))
         return ec;
-
     suitable = false;
     for (auto i = 0u; i < num_formats; ++i) {
         const auto& format = formats[i];
-        if (format.format == surface_format &&
-            format.colorSpace == surface_color_space) {
+        if (format.format == surface_format && format.colorSpace == surface_color_space) {
             suitable = true;
             break;
         }
@@ -455,18 +348,14 @@ VkResult check_surface_format(VkPhysicalDevice device, VkSurfaceKHR surface,
     return VK_SUCCESS;
 }
 
-VkResult check_present_mode(VkPhysicalDevice device, VkSurfaceKHR surface,
-                            const VkPresentModeKHR present_mode,
-                            bool& suitable) noexcept {
+VkResult check_present_mode(VkPhysicalDevice device, VkSurfaceKHR surface, //
+                            const VkPresentModeKHR present_mode, bool& suitable) noexcept {
     uint32_t num_modes = 0;
-    if (auto ec = vkGetPhysicalDeviceSurfacePresentModesKHR(
-            device, surface, &num_modes, nullptr))
+    if (auto ec = vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &num_modes, nullptr))
         return ec;
     auto modes = make_unique<VkPresentModeKHR[]>(num_modes);
-    if (auto ec = vkGetPhysicalDeviceSurfacePresentModesKHR(
-            device, surface, &num_modes, modes.get()))
+    if (auto ec = vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &num_modes, modes.get()))
         return ec;
-
     suitable = false;
     for (auto i = 0u; i < num_modes; ++i) {
         if (modes[i] == present_mode) {
@@ -477,8 +366,7 @@ VkResult check_present_mode(VkPhysicalDevice device, VkSurfaceKHR surface,
     return VK_SUCCESS;
 }
 
-vulkan_shader_module_t::vulkan_shader_module_t(
-    VkDevice _device, const fs::path fpath) noexcept(false)
+vulkan_shader_module_t::vulkan_shader_module_t(VkDevice _device, const fs::path fpath) noexcept(false)
     : device{_device} {
     if (fs::exists(fpath) == false)
         throw system_error{ENOENT, system_category()};
@@ -494,10 +382,9 @@ vulkan_shader_module_t::~vulkan_shader_module_t() noexcept {
     vkDestroyShaderModule(device, handle, nullptr);
 }
 
-vulkan_swapchain_t::vulkan_swapchain_t(
-    VkDevice _device, VkSurfaceKHR surface,
-    const VkSurfaceCapabilitiesKHR& capabilities, VkFormat surface_format,
-    VkColorSpaceKHR surface_color_space, VkPresentModeKHR present_mode)
+vulkan_swapchain_t::vulkan_swapchain_t(VkDevice _device, VkSurfaceKHR surface,
+                                       const VkSurfaceCapabilitiesKHR& capabilities, VkFormat surface_format,
+                                       VkColorSpaceKHR surface_color_space, VkPresentModeKHR present_mode)
     : device{_device} {
     info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     info.surface = surface;
@@ -521,18 +408,15 @@ vulkan_swapchain_t::~vulkan_swapchain_t() noexcept {
     vkDestroySwapchainKHR(device, handle, nullptr);
 }
 
-vulkan_presentation_t::vulkan_presentation_t(
-    VkDevice _device, VkRenderPass renderpass, VkSwapchainKHR swapchain,
-    const VkSurfaceCapabilitiesKHR& capabilities,
-    VkFormat surface_format) noexcept(false)
+vulkan_presentation_t::vulkan_presentation_t(VkDevice _device, VkRenderPass renderpass, //
+                                             VkSwapchainKHR swapchain, const VkSurfaceCapabilitiesKHR& capabilities,
+                                             VkFormat surface_format) noexcept(false)
     : device{_device} {
-    if (auto ec =
-            vkGetSwapchainImagesKHR(device, swapchain, &num_images, nullptr))
+    if (auto ec = vkGetSwapchainImagesKHR(device, swapchain, &num_images, nullptr))
         throw vulkan_exception_t{ec, "vkGetSwapchainImagesKHR"};
     num_images = min(num_images, capabilities.minImageCount + 1);
     images = make_unique<VkImage[]>(num_images);
-    if (auto ec = vkGetSwapchainImagesKHR(device, swapchain, &num_images,
-                                          images.get()))
+    if (auto ec = vkGetSwapchainImagesKHR(device, swapchain, &num_images, images.get()))
         throw vulkan_exception_t{ec, "vkGetSwapchainImagesKHR"};
 
     image_views = make_unique<VkImageView[]>(num_images);
@@ -564,8 +448,7 @@ vulkan_presentation_t::vulkan_presentation_t(
         info.width = image_extent.width;
         info.height = image_extent.height;
         info.layers = 1;
-        if (auto ec =
-                vkCreateFramebuffer(device, &info, nullptr, &framebuffers[i]))
+        if (auto ec = vkCreateFramebuffer(device, &info, nullptr, &framebuffers[i]))
             throw vulkan_exception_t{ec, "vkCreateFramebuffer"};
     }
 }
@@ -578,9 +461,7 @@ vulkan_presentation_t::~vulkan_presentation_t() noexcept {
     }
 }
 
-vulkan_command_pool_t::vulkan_command_pool_t(VkDevice _device,
-                                             uint32_t queue_index,
-                                             uint32_t _count) noexcept(false)
+vulkan_command_pool_t::vulkan_command_pool_t(VkDevice _device, uint32_t queue_index, uint32_t _count) noexcept(false)
     : device{_device}, count{_count} {
     {
         VkCommandPoolCreateInfo info{};
@@ -605,8 +486,7 @@ vulkan_command_pool_t::~vulkan_command_pool_t() noexcept {
     vkDestroyCommandPool(device, handle, nullptr);
 }
 
-vulkan_semaphore_t::vulkan_semaphore_t(VkDevice _device) noexcept(false)
-    : device{_device} {
+vulkan_semaphore_t::vulkan_semaphore_t(VkDevice _device) noexcept(false) : device{_device} {
     VkSemaphoreCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     if (auto ec = vkCreateSemaphore(device, &info, nullptr, &handle))
@@ -617,8 +497,7 @@ vulkan_semaphore_t::~vulkan_semaphore_t() noexcept {
     vkDestroySemaphore(device, handle, nullptr);
 }
 
-vulkan_fence_t::vulkan_fence_t(VkDevice _device) noexcept(false)
-    : device{_device} {
+vulkan_fence_t::vulkan_fence_t(VkDevice _device) noexcept(false) : device{_device} {
     VkFenceCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     if (auto ec = vkCreateFence(device, &info, nullptr, &handle))
@@ -629,18 +508,14 @@ vulkan_fence_t::~vulkan_fence_t() noexcept {
     vkDestroyFence(device, handle, nullptr);
 }
 
-VkResult create_vertex_buffer(VkDevice device, VkBuffer& buffer,
-                              VkBufferCreateInfo& info,
-                              uint32_t length) noexcept {
+VkResult create_vertex_buffer(VkDevice device, VkBuffer& buffer, VkBufferCreateInfo& info, uint32_t length) noexcept {
     info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     info.size = length;
     info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     return vkCreateBuffer(device, &info, nullptr, &buffer);
 }
-VkResult create_index_buffer(VkDevice device, VkBuffer& buffer,
-                             VkBufferCreateInfo& info,
-                             uint32_t length) noexcept {
+VkResult create_index_buffer(VkDevice device, VkBuffer& buffer, VkBufferCreateInfo& info, uint32_t length) noexcept {
     info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     info.size = length;
     info.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
@@ -648,10 +523,9 @@ VkResult create_index_buffer(VkDevice device, VkBuffer& buffer,
     return vkCreateBuffer(device, &info, nullptr, &buffer);
 }
 
-VkResult
-allocate_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory& memory,
-                const VkBufferCreateInfo& buffer_info, VkFlags desired,
-                const VkPhysicalDeviceMemoryProperties& props) noexcept {
+VkResult allocate_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory& memory,
+                         const VkBufferCreateInfo& buffer_info, VkFlags desired,
+                         const VkPhysicalDeviceMemoryProperties& props) noexcept {
     VkMemoryRequirements requirements{};
     vkGetBufferMemoryRequirements(device, buffer, &requirements);
     VkMemoryAllocateInfo info{};
@@ -670,8 +544,7 @@ allocate_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory& memory,
     return vkAllocateMemory(device, &info, nullptr, &memory);
 }
 
-VkResult initialize_memory(VkDevice device, VkBuffer buffer,
-                           VkDeviceMemory memory, const void* data) noexcept {
+VkResult initialize_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, const void* data) noexcept {
     constexpr auto offset = 0;
     if (auto ec = vkBindBufferMemory(device, buffer, memory, offset))
         return ec;
@@ -687,8 +560,7 @@ VkResult initialize_memory(VkDevice device, VkBuffer buffer,
     return VK_SUCCESS;
 }
 
-VkResult write_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory,
-                      const void* data) noexcept {
+VkResult write_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, const void* data) noexcept {
     constexpr auto offset = 0;
     VkMemoryRequirements requirements{};
     vkGetBufferMemoryRequirements(device, buffer, &requirements);
@@ -700,4 +572,37 @@ VkResult write_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory,
     memcpy(dst, data, requirements.size);
     vkUnmapMemory(device, memory);
     return VK_SUCCESS;
+}
+
+VkResult render_submit(VkQueue queue,                       //
+                       gsl::span<VkCommandBuffer> commands, //
+                       VkFence fence, VkSemaphore wait, VkSemaphore signal) noexcept {
+    VkSubmitInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    VkSemaphore wait_group[] = {wait};
+    info.pWaitSemaphores = wait_group;
+    info.waitSemaphoreCount = 1;
+    const VkPipelineStageFlags stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    info.pWaitDstStageMask = stages;
+    info.pCommandBuffers = commands.data();
+    info.commandBufferCount = commands.size();
+    VkSemaphore signal_group[] = {signal};
+    info.pSignalSemaphores = signal_group;
+    info.signalSemaphoreCount = 1;
+    return vkQueueSubmit(queue, 1, &info, fence);
+}
+
+VkResult present_submit(VkQueue queue,                                  //
+                        uint32_t image_index, VkSwapchainKHR swapchain, //
+                        VkSemaphore wait) noexcept {
+    VkPresentInfoKHR info{};
+    info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    VkSemaphore wait_group[] = {wait};
+    info.pWaitSemaphores = wait_group;
+    info.waitSemaphoreCount = 1;
+    VkSwapchainKHR swapchains[] = {swapchain};
+    info.pSwapchains = swapchains;
+    info.swapchainCount = 1;
+    info.pImageIndices = &image_index;
+    return vkQueuePresentKHR(queue, &info);
 }

@@ -17,6 +17,7 @@ add_library(graphics SHARED
 
 set_target_properties(graphics
 PROPERTIES
+    CXX_STANDARD 17
     VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17134.0"
     WINDOWS_EXPORT_ALL_SYMBOLS  true
 )
@@ -45,7 +46,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES Clang)
     if(WIN32)
         target_compile_options(graphics
         PUBLIC
-            /std:c++latest
+            /std:c++17
         PRIVATE
             /W4
         )
@@ -53,7 +54,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES Clang)
     else()
         target_compile_options(graphics
         PUBLIC
-            -std=c++2a -stdlib=libc++
+            -std=c++20 -stdlib=libc++
         PRIVATE
             -Wall -Wextra
         )
@@ -75,7 +76,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES GNU)
 elseif(MSVC)
     target_compile_options(graphics
     PUBLIC
-        /std:c++latest
+        /std:c++17
     PRIVATE
         /W4 
     )
@@ -124,6 +125,7 @@ add_executable(graphics_test_suite
     test/test_main.cpp
     test/test_vulkan_device.cpp
     test/test_vulkan_surface_glfw.cpp
+    test/test_vulkan_pipeline.cpp
 )
 add_dependencies(graphics_test_suite
     compile_shaders_glsl
@@ -131,7 +133,7 @@ add_dependencies(graphics_test_suite
 
 set_target_properties(graphics_test_suite
 PROPERTIES
-    CXX_STANDARD 20
+    CXX_STANDARD 17
 )
 
 target_include_directories(graphics_test_suite
