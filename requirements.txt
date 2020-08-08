@@ -1,6 +1,0 @@
-#
-#   https://github.com/matusnovak/doxybook
-#
-doxybook
-mkdocs
-mkdocs-material

@@ -19,6 +19,11 @@
           "type": "PATH"
         },
         {
+          "name": "VCPKG_TARGET_TRIPLET",
+          "value": "x64-windows",
+          "type": "STRING"
+        },
+        {
           "name": "BUILD_TESTING",
           "value": "true",
           "type": "BOOL"
@@ -42,6 +47,71 @@
           "name": "CMAKE_TOOLCHAIN_FILE",
           "value": "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake",
           "type": "PATH"
+        },
+        {
+          "name": "VCPKG_TARGET_TRIPLET",
+          "value": "x64-windows",
+          "type": "STRING"
+        },
+        {
+          "name": "BUILD_TESTING",
+          "value": "true",
+          "type": "BOOL"
+        }
+      ]
+    },
+    {
+      "name": "x64-Debug-Clang",
+      "generator": "Ninja",
+      "configurationType": "Debug",
+      "inheritEnvironments": [
+        "clang_cl_x64_x64"
+      ],
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "-v",
+      "ctestCommandArgs": "",
+      "variables": [
+        {
+          "name": "CMAKE_TOOLCHAIN_FILE",
+          "value": "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake",
+          "type": "PATH"
+        },
+        {
+          "name": "VCPKG_TARGET_TRIPLET",
+          "value": "x64-windows",
+          "type": "STRING"
+        },
+        {
+          "name": "BUILD_TESTING",
+          "value": "true",
+          "type": "BOOL"
+        }
+      ]
+    },
+    {
+      "name": "x64-Release-Clang",
+      "generator": "Ninja",
+      "configurationType": "Release",
+      "inheritEnvironments": [
+        "clang_cl_x64_x64"
+      ],
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "-v",
+      "ctestCommandArgs": "",
+      "variables": [
+        {
+          "name": "CMAKE_TOOLCHAIN_FILE",
+          "value": "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake",
+          "type": "PATH"
+        },
+        {
+          "name": "VCPKG_TARGET_TRIPLET",
+          "value": "x64-windows",
+          "type": "STRING"
         },
         {
           "name": "BUILD_TESTING",
