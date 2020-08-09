@@ -579,16 +579,18 @@ VkResult render_submit(VkQueue queue,                       //
                        VkFence fence, VkSemaphore wait, VkSemaphore signal) noexcept {
     VkSubmitInfo info{};
     info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    VkSemaphore wait_group[] = {wait};
-    info.pWaitSemaphores = wait_group;
-    info.waitSemaphoreCount = 1;
-    const VkPipelineStageFlags stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    info.pWaitDstStageMask = stages;
     info.pCommandBuffers = commands.data();
     info.commandBufferCount = commands.size();
-    VkSemaphore signal_group[] = {signal};
-    info.pSignalSemaphores = signal_group;
-    info.signalSemaphoreCount = 1;
+    const VkPipelineStageFlags stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    info.pWaitDstStageMask = stages;
+    if (wait != VK_NULL_HANDLE) { // if null handle, no wait
+        info.pWaitSemaphores = &wait;
+        info.waitSemaphoreCount = 1;
+    }
+    if (signal != VK_NULL_HANDLE) { // if null handle, no signal
+        info.pSignalSemaphores = &signal;
+        info.signalSemaphoreCount = 1;
+    }
     return vkQueueSubmit(queue, 1, &info, fence);
 }
 
