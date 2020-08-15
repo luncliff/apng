@@ -78,6 +78,8 @@ fs::path get_asset_dir() noexcept {
 auto stream = spdlog::stdout_color_st("test");
 
 auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger> {
+    using namespace spdlog::level;
     stream->set_pattern("%v");
+    stream->set_level(level_enum::trace);
     return stream;
 }

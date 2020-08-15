@@ -140,10 +140,10 @@ struct input2_t : vulkan_pipeline_input_t {
 
   public:
     input2_t(VkDevice _device, const fs::path& shader_dir) noexcept(false)
-        : device{_device}, vertices{{{-0.5f, -0.5f}, {1, 0, 0}},
-                                    {{0.5f, -0.5f}, {0, 1, 0}},
-                                    {{0.5f, 0.5f}, {0, 0, 1}},
-                                    {{-0.5f, 0.5f}, {1, 1, 1}}},
+        : device{_device}, vertices{{{-0.8f, -0.5f}, {1, 0, 0}},
+                                    {{0.8f, -0.5f}, {0, 1, 0}},
+                                    {{0.8f, 0.5f}, {0, 0, 1}},
+                                    {{-0.8f, 0.5f}, {1, 1, 1}}},
           indices{0, 1, 2, 2, 3, 0}, //
           vert{device, shader_dir / "sample_vert.spv"}, frag{device, shader_dir / "sample_frag.spv"} {
         // ...

@@ -145,7 +145,7 @@ class vulkan_pipeline_t final {
     VkPipelineDepthStencilStateCreateInfo depth_stencil_state{};
 
   public:
-    vulkan_pipeline_t(const vulkan_renderpass_t& renderpass,
+    vulkan_pipeline_t(VkDevice device, VkRenderPass renderpass,
                       VkExtent2D& extent, //
                       vulkan_pipeline_input_t& input) noexcept(false);
 
@@ -183,7 +183,7 @@ class vulkan_shader_module_t final {
  */
 class vulkan_swapchain_t final {
   public:
-    const VkDevice device{};
+    VkDevice device{};
     VkSwapchainKHR handle{};
     VkSwapchainCreateInfoKHR info{};
 
@@ -197,7 +197,7 @@ class vulkan_swapchain_t final {
 // https://vulkan-tutorial.com/en/Drawing_a_triangle/Drawing/Framebuffers
 class vulkan_presentation_t final {
   public:
-    const VkDevice device{};
+    VkDevice device{};
     uint32_t num_images = 0;
     std::unique_ptr<VkImage[]> images{};
     std::unique_ptr<VkImageView[]> image_views{};

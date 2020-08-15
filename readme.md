@@ -7,6 +7,7 @@
 
 * https://www.khronos.org/registry/vulkan/specs/1.2-extensions/html/vkspec.html
 * https://gpuopen.com/learn/understanding-vulkan-objects/
+* https://stackoverflow.com/a/55278393
 
 #### GLTF
 

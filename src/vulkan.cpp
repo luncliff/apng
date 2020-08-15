@@ -191,9 +191,9 @@ void vulkan_renderpass_t::setup_color_attachment(VkAttachmentDescription& colors
     color_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 }
 
-vulkan_pipeline_t::vulkan_pipeline_t(const vulkan_renderpass_t& renderpass, VkExtent2D& extent,
+vulkan_pipeline_t::vulkan_pipeline_t(VkDevice device, VkRenderPass renderpass, VkExtent2D& extent,
                                      vulkan_pipeline_input_t& input) noexcept(false)
-    : device{renderpass.device} {
+    : device{device} {
     input.setup_shader_stage(shader_stages);
     input.setup_vertex_input_state(vertex_input_state);
     setup_input_assembly(input_assembly);
@@ -217,7 +217,7 @@ vulkan_pipeline_t::vulkan_pipeline_t(const vulkan_renderpass_t& renderpass, VkEx
     if (auto ec = make_pipeline_layout(device, layout))
         throw vulkan_exception_t{ec, "vkCreatePipelineLayout"};
     info.layout = layout;
-    info.renderPass = renderpass.handle;
+    info.renderPass = renderpass;
     info.subpass = 0;
     // ...
     info.basePipelineHandle = VK_NULL_HANDLE;

@@ -59,6 +59,19 @@ TEST_CASE("VkPhysicalDevice", "[vulkan]") {
         stream->info(" - api: {:x}", props.apiVersion);
         stream->info(" - driver: {:x}", props.driverVersion);
 
+        const VkPhysicalDeviceLimits& limits = props.limits;
+        stream->info(" - limits:");
+        stream->info("   - max_bound_descriptor_set: {}", limits.maxBoundDescriptorSets);
+        stream->info("   - max_descriptor_set_input_attachment: {}", limits.maxDescriptorSetInputAttachments);
+        stream->info("   - max_color_attachment: {}", limits.maxColorAttachments);
+        stream->info("   - framebuffer_color_sample_count: {}", limits.framebufferColorSampleCounts);
+        stream->info("   - framebuffer_depth_sample_count: {}", limits.framebufferDepthSampleCounts);
+        stream->info("   - framebuffer_stencil_sample_count: {}", limits.framebufferStencilSampleCounts);
+        stream->info("   - max_framebuffer_width: {}", limits.maxFramebufferWidth);
+        stream->info("   - max_framebuffer_height: {}", limits.maxFramebufferWidth);
+        stream->info("   - max_framebuffer_layers: {}", limits.maxFramebufferLayers);
+        stream->info("   - max_clip_distance: {}", limits.maxClipDistances);
+
         VkPhysicalDeviceMemoryProperties memory{};
         vkGetPhysicalDeviceMemoryProperties(device, &memory);
         stream->info(" - memory:");

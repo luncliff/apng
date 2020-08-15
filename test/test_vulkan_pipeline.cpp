@@ -2,6 +2,7 @@
 #include <spdlog/spdlog.h>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <initializer_list>
 #include <thread>
 
 #include "vulkan_1.h"
@@ -10,8 +11,9 @@ using namespace std;
 
 fs::path get_asset_dir() noexcept;
 auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger>;
+auto open_glfw() -> gsl::final_action<void (*)()>;
 auto create_window_glfw(gsl::czstring<> name) noexcept -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>;
-auto make_vulkan_instance(GLFWwindow*, gsl::czstring<> name) -> std::unique_ptr<vulkan_instance_t>;
+auto make_vulkan_instance_glfw(gsl::czstring<> name) -> vulkan_instance_t;
 
 TEST_CASE("RenderPass + Pipeline", "[vulkan]") {
     const char* layers[1]{"VK_LAYER_KHRONOS_validation"};
@@ -20,6 +22,9 @@ TEST_CASE("RenderPass + Pipeline", "[vulkan]") {
                                gsl::make_span(layers, 1), gsl::make_span(extensions, 1)};
     VkPhysicalDevice physical_device{};
     REQUIRE(get_physical_device(instance.handle, physical_device) == VK_SUCCESS);
+    VkPhysicalDeviceProperties prop{};
+    vkGetPhysicalDeviceProperties(physical_device, &prop);
+
     VkPhysicalDeviceMemoryProperties meminfo{};
     vkGetPhysicalDeviceMemoryProperties(physical_device, &meminfo);
 
@@ -42,7 +47,7 @@ TEST_CASE("RenderPass + Pipeline", "[vulkan]") {
     // graphics pipeline + presentation
     vulkan_renderpass_t renderpass{device, VK_FORMAT_B8G8R8A8_UNORM};
     REQUIRE(renderpass.handle);
-    vulkan_pipeline_t pipeline{renderpass, min_image_extent, *input};
+    vulkan_pipeline_t pipeline{device, renderpass.handle, min_image_extent, *input};
     REQUIRE(pipeline.handle);
 }
 
@@ -72,16 +77,16 @@ void sleep_for_fps(stop_watch_t& timer, uint32_t hz) noexcept {
 
 class recorder_t final {
   public:
-    VkCommandBuffer command_buffer;
+    VkCommandBuffer commands;
     VkClearValue color{0.0f, 0.0f, 0.0f, 1.0f};
 
   public:
-    recorder_t(VkCommandBuffer _command_buffer, //
+    recorder_t(VkCommandBuffer command_buffer, //
                VkRenderPass renderpass, VkFramebuffer framebuffer, VkExtent2D extent) noexcept(false)
-        : command_buffer{_command_buffer} {
+        : commands{command_buffer} {
         VkCommandBufferBeginInfo begin{};
         begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        if (auto ec = vkBeginCommandBuffer(command_buffer, &begin))
+        if (auto ec = vkBeginCommandBuffer(commands, &begin))
             throw vulkan_exception_t{ec, "vkBeginCommandBuffer"};
         VkRenderPassBeginInfo render{};
         render.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -91,11 +96,11 @@ class recorder_t final {
         render.renderArea.extent = extent;
         render.clearValueCount = 1;
         render.pClearValues = &color;
-        vkCmdBeginRenderPass(command_buffer, &render, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBeginRenderPass(commands, &render, VK_SUBPASS_CONTENTS_INLINE);
     }
     ~recorder_t() noexcept(false) {
-        vkCmdEndRenderPass(command_buffer);
-        if (auto ec = vkEndCommandBuffer(command_buffer))
+        vkCmdEndRenderPass(commands);
+        if (auto ec = vkEndCommandBuffer(commands))
             throw vulkan_exception_t{ec, "vkEndCommandBuffer"};
     }
 };
@@ -128,7 +133,7 @@ TEST_CASE("Render Offscreen", "[vulkan]") {
     constexpr auto surface_format = VK_FORMAT_B8G8R8A8_UNORM;
     vulkan_renderpass_t renderpass{device, surface_format};
     REQUIRE(renderpass.handle);
-    vulkan_pipeline_t pipeline{renderpass, image_extent, *input};
+    vulkan_pipeline_t pipeline{device, renderpass.handle, image_extent, *input};
     REQUIRE(pipeline.handle);
 
     const auto num_images = 2u;
@@ -212,8 +217,8 @@ TEST_CASE("Render Offscreen", "[vulkan]") {
     vulkan_command_pool_t command_pool{device, index, num_images};
     for (auto i = 0u; i < num_images; ++i) {
         recorder_t recorder{command_pool.buffers[i], renderpass.handle, framebuffers[i], image_extent};
-        vkCmdBindPipeline(recorder.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
-        input->record(pipeline.handle, recorder.command_buffer);
+        vkCmdBindPipeline(recorder.commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
+        input->record(pipeline.handle, recorder.commands);
     }
     // render + wait
     vulkan_fence_t fence{device};
@@ -229,28 +234,25 @@ TEST_CASE("Render Offscreen", "[vulkan]") {
     REQUIRE(vkDeviceWaitIdle(device) == VK_SUCCESS);
 }
 
-TEST_CASE("Render Surface", "[vulkan][glfw]") {
-    // glfw init + window
-    const auto title = "Render Surface";
-    auto window = create_window_glfw(title);
-    glfwMakeContextCurrent(window.get());
+TEST_CASE("render single surface", "[vulkan][glfw]") {
+    auto stream = get_current_stream();
+    auto glfw = open_glfw();
 
     // instance / physical device
-    auto instance = make_vulkan_instance(window.get(), title);
+    auto instance = make_vulkan_instance_glfw("instance0");
     VkPhysicalDevice physical_device{};
-    REQUIRE(get_physical_device(instance->handle, physical_device) == VK_SUCCESS);
+    REQUIRE(get_physical_device(instance.handle, physical_device) == VK_SUCCESS);
     VkPhysicalDeviceMemoryProperties meminfo{};
     vkGetPhysicalDeviceMemoryProperties(physical_device, &meminfo);
 
     // surface
+    auto window = create_window_glfw("window0");
+    glfwMakeContextCurrent(window.get());
     VkSurfaceKHR surface{};
     VkSurfaceCapabilitiesKHR capabilities{};
-    REQUIRE(glfwCreateWindowSurface(instance->handle, window.get(), nullptr, &surface) //
-            == VK_SUCCESS);
-    REQUIRE(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface,
-                                                      &capabilities) //
-            == VK_SUCCESS);
-    auto on_return_1 = gsl::finally([instance = instance->handle, surface]() {
+    REQUIRE(glfwCreateWindowSurface(instance.handle, window.get(), nullptr, &surface) == VK_SUCCESS);
+    REQUIRE(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &capabilities) == VK_SUCCESS);
+    auto on_return_1 = gsl::finally([instance = instance.handle, surface]() {
         vkDestroySurfaceKHR(instance, surface, nullptr); //
     });
     constexpr auto surface_format = VK_FORMAT_B8G8R8A8_SRGB;
@@ -288,11 +290,12 @@ TEST_CASE("Render Surface", "[vulkan][glfw]") {
     // graphics pipeline + presentation
     vulkan_renderpass_t renderpass{device, surface_format};
     REQUIRE(renderpass.handle);
-    vulkan_pipeline_t pipeline{renderpass, capabilities.maxImageExtent, *input};
+    vulkan_pipeline_t pipeline{device, renderpass.handle, capabilities.maxImageExtent, *input};
     REQUIRE(pipeline.handle);
 
     // recreate swapchain and presentation multiple times
-    for (auto i = 0; i < 5; ++i) {
+    for (auto i = 0; i < 1; ++i) {
+        stream->warn("current format: {}", surface_format);
         auto swapchain = make_unique<vulkan_swapchain_t>(device, surface, capabilities, surface_format,
                                                          surface_color_space, present_mode);
         auto presentation = make_unique<vulkan_presentation_t>(device, renderpass.handle, swapchain->handle,
@@ -308,8 +311,8 @@ TEST_CASE("Render Surface", "[vulkan][glfw]") {
             // record: command buffer + renderpass + pipeline
             recorder_t recorder{command_pool.buffers[i], renderpass.handle, presentation->framebuffers[i],
                                 capabilities.maxImageExtent};
-            vkCmdBindPipeline(recorder.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
-            input->record(pipeline.handle, recorder.command_buffer);
+            vkCmdBindPipeline(recorder.commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
+            input->record(pipeline.handle, recorder.commands);
         }
 
         // synchronization + timer
@@ -320,6 +323,251 @@ TEST_CASE("Render Surface", "[vulkan][glfw]") {
 
         auto repeat = 120u;
         while (!glfwWindowShouldClose(window.get()) && repeat--) {
+            glfwPollEvents();
+            /// render: select command buffer for current image and submit to GFX queue
+            uint32_t image_index{};
+            {
+                if (auto ec = vkAcquireNextImageKHR(device, swapchain->handle, UINT64_MAX, semaphore_1.handle,
+                                                    VK_NULL_HANDLE, &image_index))
+                    FAIL(ec);
+                if (auto ec = render_submit(queues[0],                                                   //
+                                            gsl::make_span(command_pool.buffers.get() + image_index, 1), //
+                                            fence.handle, semaphore_1.handle, semaphore_2.handle))
+                    FAIL(ec);
+            }
+            /// present: semaphore for synchronization and request presentation
+            {
+                // glfwSwapBuffers(window);
+                if (auto ec = present_submit(queues[1], image_index, swapchain->handle, semaphore_2.handle))
+                    FAIL(ec);
+                if (auto ec = vkQueueWaitIdle(queues[1]))
+                    FAIL(ec);
+            }
+            /// wait for each loop
+            VkFence fences[1]{fence.handle};
+            uint64_t nano = UINT64_MAX;
+            if (auto ec = vkWaitForFences(device, 1, fences, VK_TRUE, nano))
+                FAIL(ec);
+            if (auto ec = vkResetFences(device, 1, fences))
+                FAIL(ec);
+            sleep_for_fps(timer, 120);
+        }
+    }
+}
+
+class vulkan_surface_owner_t final {
+  public:
+    unique_ptr<GLFWwindow, void (*)(GLFWwindow*)> impl;
+    VkInstance instance;
+    VkSurfaceKHR handle;
+    VkSurfaceCapabilitiesKHR capabilities;
+
+  public:
+    vulkan_surface_owner_t(gsl::czstring<> title, //
+                           VkInstance instance, VkPhysicalDevice physical_device) noexcept(false);
+    ~vulkan_surface_owner_t() noexcept;
+};
+
+void print_debug(spdlog::logger& stream, const VkSurfaceFormatKHR& format) {
+    stream.debug("format:");
+    switch (auto code = format.format) {
+    case VK_FORMAT_B8G8R8A8_UNORM:           // 44
+    case VK_FORMAT_B8G8R8A8_SRGB:            // 50
+    case VK_FORMAT_A2R10G10B10_UNORM_PACK32: // 58
+    case VK_FORMAT_R16G16B16A16_SFLOAT:      // 97
+    default:
+        stream.debug(" - code: {}", code);
+        break;
+    }
+    stream.debug(" - colorspace: {}", format.colorSpace);
+}
+
+VkResult check_support(VkPhysicalDevice device, VkSurfaceKHR surface, //
+                       VkFormat surface_format, VkColorSpaceKHR surface_color_space, VkPresentModeKHR present_mode) {
+    auto stream = get_current_stream();
+    uint32_t num_formats = 0;
+    if (auto ec = vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &num_formats, nullptr))
+        return ec;
+    auto formats = make_unique<VkSurfaceFormatKHR[]>(num_formats);
+    if (auto ec = vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &num_formats, formats.get()))
+        return ec;
+    bool suitable = false;
+    for (auto i = 0u; i < num_formats; ++i) {
+        const auto& format = formats[i];
+        if (format.format == surface_format && format.colorSpace == surface_color_space) {
+            suitable = true;
+            break;
+        }
+    }
+    if (suitable == false)
+        return VK_ERROR_FORMAT_NOT_SUPPORTED;
+    uint32_t num_modes = 0;
+    if (auto ec = vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &num_modes, nullptr))
+        return ec;
+    auto modes = make_unique<VkPresentModeKHR[]>(num_modes);
+    if (auto ec = vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &num_modes, modes.get()))
+        return ec;
+    suitable = false;
+    for (auto i = 0u; i < num_modes; ++i) {
+        if (modes[i] == present_mode) {
+            suitable = true;
+            break;
+        }
+    }
+    if (suitable == false)
+        return VK_ERROR_UNKNOWN;
+    return VK_SUCCESS;
+};
+
+/**
+ * @brief create 1 device with 2 queue information
+ * 
+ * @param queues queue information. 0 is for graphics, 1 is for presentation
+ * @return VkResult `VK_SUCCESS` if everything was successful
+ */
+VkResult create_device(VkPhysicalDevice physical_device,                     //
+                       const VkSurfaceKHR* surfaces, uint32_t surface_count, //
+                       VkDevice& device, VkDeviceQueueCreateInfo (&queues)[2]) {
+    VkPhysicalDeviceFeatures features{};
+    vkGetPhysicalDeviceFeatures(physical_device, &features);
+    uint32_t count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, nullptr);
+    auto properties = std::make_unique<VkQueueFamilyProperties[]>(count);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, properties.get());
+    // 2 queue (gfx, present)
+    queues[0].sType = queues[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    float priority = 0;
+    queues[0].pQueuePriorities = queues[1].pQueuePriorities = &priority;
+    queues[0].queueFamilyIndex = queues[1].queueFamilyIndex = UINT32_MAX;
+    for (auto i = 0u; i < count; ++i) {
+        // graphics queue
+        if (queues[0].queueFamilyIndex == UINT32_MAX) {
+            const auto& prop = properties[i];
+            if (prop.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                queues[0].queueFamilyIndex = i;
+                queues[0].queueCount = 1;
+                continue;
+            }
+        }
+        // present queue
+        if (queues[1].queueFamilyIndex == UINT32_MAX) {
+            for (auto surface : gsl::make_span(surfaces, surface_count)) {
+                VkBool32 support = false;
+                if (auto ec = vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, surface, &support))
+                    return ec;
+                if (support == false)
+                    return VK_ERROR_UNKNOWN;
+            }
+            queues[1].queueFamilyIndex = i;
+            queues[1].queueCount = 1;
+        }
+    }
+    if (queues[0].queueFamilyIndex > count)
+        return VK_ERROR_UNKNOWN;
+    if (queues[1].queueFamilyIndex > count)
+        return VK_ERROR_UNKNOWN;
+    VkDeviceCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    info.queueCreateInfoCount = 2;
+    info.pQueueCreateInfos = queues;
+    const char* extension_names[1]{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    info.ppEnabledExtensionNames = extension_names;
+    info.enabledExtensionCount = 1;
+    info.pEnabledFeatures = &features;
+    return vkCreateDevice(physical_device, &info, nullptr, &device);
+}
+
+TEST_CASE("render multiple surface", "[vulkan][glfw]") {
+    auto stream = get_current_stream();
+    auto glfw = open_glfw();
+    // instance / physical device
+    auto instance = make_vulkan_instance_glfw("instance0");
+    VkPhysicalDevice physical_device{};
+    REQUIRE(get_physical_device(instance.handle, physical_device) == VK_SUCCESS);
+    // each surfaces has different format,
+    // but they share colorspace and present mode
+    vulkan_surface_owner_t surfaces[3]{
+        {"VK_FORMAT_B8G8R8A8_SRGB", instance.handle, physical_device},
+        {"VK_FORMAT_B8G8R8A8_UNORM", instance.handle, physical_device},
+        {"VK_FORMAT_R16G16B16A16_SFLOAT", instance.handle, physical_device},
+    };
+    const VkFormat surface_formats[3]{VK_FORMAT_B8G8R8A8_SRGB,  //
+                                      VK_FORMAT_B8G8R8A8_UNORM, //
+                                      VK_FORMAT_R16G16B16A16_SFLOAT};
+    const VkColorSpaceKHR surface_color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    const VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    REQUIRE(check_support(physical_device, surfaces[0].handle, //
+                          surface_formats[0], surface_color_space, present_mode) == VK_SUCCESS);
+    REQUIRE(check_support(physical_device, surfaces[1].handle, //
+                          surface_formats[1], surface_color_space, present_mode) == VK_SUCCESS);
+    REQUIRE(check_support(physical_device, surfaces[2].handle, //
+                          surface_formats[2], surface_color_space, present_mode) == VK_SUCCESS);
+    // create a virtual device and queue to submit command buffers
+    VkDevice device = VK_NULL_HANDLE;
+    auto on_return = gsl::finally([&device]() {
+        if (device != VK_NULL_HANDLE)
+            vkDestroyDevice(device, nullptr);
+    });
+    VkDeviceQueueCreateInfo queue_infos[2]{};
+    VkQueue queues[2]{};
+    {
+        std::initializer_list<VkSurfaceKHR> surface_list{
+            surfaces[0].handle,
+            surfaces[1].handle,
+            surfaces[2].handle,
+        };
+        REQUIRE(create_device(physical_device, surface_list.begin(), surface_list.size(), //
+                              device, queue_infos) == VK_SUCCESS);
+        vkGetDeviceQueue(device, queue_infos[0].queueFamilyIndex, queue_infos[0].queueCount - 1, // gfx
+                         queues + 0);
+        vkGetDeviceQueue(device, queue_infos[1].queueFamilyIndex, queue_infos[1].queueCount - 1, // present
+                         queues + 1);
+    }
+    // input data + shader
+    VkPhysicalDeviceMemoryProperties meminfo{};
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &meminfo);
+    auto input_impl = make_pipeline_input_2(device, meminfo, get_asset_dir());
+    vulkan_pipeline_input_t& input = *input_impl;
+    // graphics pipeline + presentation
+    vulkan_renderpass_t renderpasses[3]{{device, surface_formats[0]}, //
+                                        {device, surface_formats[1]},
+                                        {device, surface_formats[2]}};
+    vulkan_pipeline_t pipelines[3]{{device, renderpasses[0].handle, surfaces[0].capabilities.maxImageExtent, input},
+                                   {device, renderpasses[1].handle, surfaces[1].capabilities.maxImageExtent, input},
+                                   {device, renderpasses[2].handle, surfaces[2].capabilities.maxImageExtent, input}};
+    // select swapchain and presentation for purpose
+    // here, we use each surface format
+    for (auto i = 0; i < 3; ++i) {
+        const auto& renderpass = renderpasses[i];
+        const auto& pipeline = pipelines[i];
+        auto swapchain = make_unique<vulkan_swapchain_t>(device, surfaces[i].handle, surfaces[i].capabilities,
+                                                         surface_formats[i], surface_color_space, present_mode);
+        auto presentation = make_unique<vulkan_presentation_t>(device, renderpass.handle, swapchain->handle,
+                                                               surfaces[i].capabilities, surface_formats[i]);
+        auto on_render_end = gsl::finally([device]() {
+            // device must be idle before making swapchain recreation
+            REQUIRE(vkDeviceWaitIdle(device) == VK_SUCCESS);
+        });
+        // command buffer
+        vulkan_command_pool_t command_pool{device, queue_infos[0].queueFamilyIndex, presentation->num_images};
+        for (auto i = 0u; i < presentation->num_images; ++i) {
+            // record: command buffer + renderpass + pipeline
+            recorder_t recorder{command_pool.buffers[i], //
+                                renderpass.handle, presentation->framebuffers[i],
+                                surfaces[i].capabilities.maxImageExtent};
+            vkCmdBindPipeline(recorder.commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
+            input.record(pipeline.handle, recorder.commands);
+        }
+        // synchronization + timer
+        stop_watch_t timer{};
+        vulkan_semaphore_t semaphore_1{device}; // image ready
+        vulkan_semaphore_t semaphore_2{device}; // rendering
+        vulkan_fence_t fence{device};
+        // select current window
+        GLFWwindow* window = surfaces[i].impl.get();
+        glfwMakeContextCurrent(window);
+        auto repeat = 120u;
+        while (glfwWindowShouldClose(window) == false && repeat--) {
             glfwPollEvents();
             /// render: select command buffer for current image and submit to GFX queue
             uint32_t image_index{};
