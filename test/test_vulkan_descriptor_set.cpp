@@ -6,7 +6,11 @@
 #include <spdlog/spdlog.h>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-#include <tiny_gltf.h>
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image.h>
+#include <stb_image_write.h>
+// #include <tiny_gltf.h>
 
 #include "vulkan_1.h"
 
@@ -16,9 +20,7 @@ fs::path get_asset_dir() noexcept;
 auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger>;
 
 auto open_glfw() -> gsl::final_action<void (*)()>;
-
 auto make_vulkan_instance_glfw(gsl::czstring<> name) -> vulkan_instance_t;
-
 auto create_window_glfw(gsl::czstring<> name) noexcept -> unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>;
 
 class vulkan_surface_owner_t final {
@@ -35,8 +37,6 @@ class vulkan_surface_owner_t final {
 };
 
 TEST_CASE("descriptor set", "[vulkan][glfw]") {
-    auto stream = get_current_stream();
-
     // instance / physical device
     auto glfw = open_glfw();
     auto instance = make_vulkan_instance_glfw("instance0");
@@ -134,4 +134,161 @@ TEST_CASE("descriptor set", "[vulkan][glfw]") {
             FAIL(ec);
         sleep_for_fps(timer, 120);
     }
+}
+
+VkResult read_image_data(VkDevice device, const VkPhysicalDeviceMemoryProperties& meminfo, //
+                         VkExtent2D& extent, int& component,                               //
+                         VkBuffer& buffer, VkDeviceMemory& memory,                         //
+                         const fs::path& fpath) {
+    auto stream = get_current_stream();
+    auto fin = open(fpath);
+    int width = 0, height = 0;
+    component = STBI_rgb_alpha;
+    auto blob = std::unique_ptr<void, void (*)(void*)>{stbi_load_from_file(fin.get(), //
+                                                                           &width, &height, &component, component),
+                                                       &stbi_image_free};
+    if (blob == nullptr)
+        throw std::runtime_error{stbi_failure_reason()};
+    extent.width = width;
+    extent.height = height;
+
+    VkBufferCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    info.size = width * height * component;
+    info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (auto ec = vkCreateBuffer(device, &info, nullptr, &buffer))
+        throw vulkan_exception_t{ec, "vkCreateBuffer"};
+
+    VkMemoryRequirements requirements{};
+    vkGetBufferMemoryRequirements(device, buffer, &requirements);
+    stream->info("VkBuffer:");
+    stream->info(" - usage: {:b}", info.usage);
+    stream->info(" - size: {}", requirements.size);
+    stream->info(" - alignment: {}", requirements.alignment);
+    {
+        const auto desired = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        VkMemoryAllocateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        info.allocationSize = requirements.size;
+        for (auto i = 0u; i < meminfo.memoryTypeCount; ++i) {
+            // match type?
+            const auto typebit = (1 << i);
+            if (requirements.memoryTypeBits & typebit) {
+                // match prop?
+                const auto mtype = meminfo.memoryTypes[i];
+                if ((mtype.propertyFlags & desired) == desired)
+                    info.memoryTypeIndex = i;
+            }
+        }
+        if (auto ec = vkAllocateMemory(device, &info, nullptr, &memory))
+            throw vulkan_exception_t{ec, "vkAllocateMemory"};
+        stream->info("VkDeviceMemory:");
+        stream->info(" - required: {}", requirements.size);
+        stream->info(" - type_index: {}", info.memoryTypeIndex);
+    }
+    if (auto ec = vkBindBufferMemory(device, buffer, memory, 0))
+        return ec;
+    void* mapping = nullptr;
+    if (auto ec = vkMapMemory(device, memory, 0, requirements.size, 0, &mapping))
+        return ec;
+    memcpy(mapping, blob.get(), requirements.size);
+    vkUnmapMemory(device, memory);
+    return VK_SUCCESS;
+}
+
+VkResult make_image(VkDevice device, const VkPhysicalDeviceMemoryProperties& meminfo, //
+                    const VkExtent2D& image_extent, VkFormat image_format,            //
+                    VkImage& image, VkDeviceMemory& memory) {
+    auto stream = get_current_stream();
+    VkImageCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    info.imageType = VK_IMAGE_TYPE_2D;
+    info.extent = {image_extent.width, image_extent.height, 1};
+    info.mipLevels = info.arrayLayers = 1;
+    info.format = image_format;
+    info.tiling = VK_IMAGE_TILING_OPTIMAL; // request exactly same size with buffer
+    info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    // this is an image for read(sampling)
+    info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    info.samples = VK_SAMPLE_COUNT_1_BIT;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (auto ec = vkCreateImage(device, &info, nullptr, &image))
+        return ec;
+    VkMemoryRequirements requirements{};
+    vkGetImageMemoryRequirements(device, image, &requirements);
+    stream->info("VkImage:");
+    stream->info(" - type: {}", "VK_IMAGE_TYPE_2D");
+    stream->info(" - format: {}", info.format);
+    stream->info(" - mipmap: {}", info.mipLevels);
+    stream->info(" - usage: {:b}", info.usage);
+    stream->info(" - size: {}", requirements.size);
+    stream->info(" - alignment: {}", requirements.alignment);
+    {
+        VkMemoryAllocateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        info.allocationSize = requirements.size;
+        const auto desired = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        for (auto i = 0u; i < meminfo.memoryTypeCount; ++i) {
+            // match type?
+            const auto typebit = (1 << i);
+            if (requirements.memoryTypeBits & typebit) {
+                // match prop?
+                const auto mtype = meminfo.memoryTypes[i];
+                if ((mtype.propertyFlags & desired) == desired)
+                    info.memoryTypeIndex = i;
+            }
+        }
+        if (auto ec = vkAllocateMemory(device, &info, nullptr, &memory))
+            return ec;
+        stream->info("VkDeviceMemory:");
+        stream->info(" - required: {}", requirements.size);
+        stream->info(" - type_index: {}", info.memoryTypeIndex);
+    }
+    return vkBindImageMemory(device, image, memory, 0);
+}
+
+TEST_CASE("create VkImage from image file", "[image]") {
+    auto stream = get_current_stream();
+
+    const char* layers[1]{"VK_LAYER_KHRONOS_validation"};
+    vulkan_instance_t instance{"app1", gsl::make_span(layers, 1), {}};
+
+    VkPhysicalDevice physical_device{};
+    REQUIRE(get_physical_device(instance.handle, physical_device) == VK_SUCCESS);
+    VkPhysicalDeviceMemoryProperties meminfo{};
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &meminfo);
+
+    VkDevice device{};
+    uint32_t qfi = UINT32_MAX;
+    REQUIRE(make_device(physical_device, device, qfi) == VK_SUCCESS);
+    REQUIRE(qfi != UINT32_MAX);
+    auto on_return_0 = gsl::finally([device]() {
+        vkDestroyDevice(device, nullptr); //
+    });
+
+    VkBuffer buffers[1]{};
+    VkImage images[1]{};
+    VkDeviceMemory memories[2]{}; // 0 for buffer, 1 for image
+    auto on_return_1 = gsl::finally([device, &buffers, &images, &memories]() {
+        if (buffers[0])
+            vkDestroyBuffer(device, buffers[0], nullptr);
+        if (images[0])
+            vkDestroyImage(device, images[0], nullptr);
+        for (auto i : {0, 1})
+            vkFreeMemory(device, memories[i], nullptr);
+    });
+    const auto fpath = get_asset_dir() / "image_1080_608.png";
+    stream->info("file: {}", fpath.generic_u8string());
+    VkExtent2D image_extent{};
+    int component{};
+    REQUIRE_NOTHROW(read_image_data(device, meminfo, image_extent, component, //
+                                    buffers[0], memories[0], fpath) == VK_SUCCESS);
+    REQUIRE(buffers[0]);
+    REQUIRE(memories[0]);
+    REQUIRE(component == 4);
+    REQUIRE(image_extent.width == 1080);
+    REQUIRE(image_extent.height == 608);
+    REQUIRE(make_image(device, meminfo, image_extent, VK_FORMAT_R8G8B8A8_UNORM, //
+                       images[0], memories[1]) == VK_SUCCESS);
 }
