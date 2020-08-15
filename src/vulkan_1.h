@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <gsl/gsl>
 #include <memory>
+#include <thread>
 #include <vulkan/vulkan.h>
 
 namespace fs = std::filesystem;
@@ -14,6 +15,32 @@ auto open(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)>;
 auto create(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)>;
 auto read(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]>;
 auto read_all(const fs::path& p, size_t& fsize) -> std::unique_ptr<std::byte[]>;
+
+class stop_watch_t final {
+    clock_t begin = clock(); // <time.h>
+
+  public:
+    uint64_t elapsed() const noexcept {
+        return clock() - begin;
+    }
+    float pick() const noexcept {
+        return static_cast<float>(elapsed()) / CLOCKS_PER_SEC;
+    }
+    float reset() noexcept {
+        const auto d = pick();
+        begin = clock();
+        return d;
+    }
+};
+
+static void sleep_for_fps(stop_watch_t& timer, uint32_t hz) noexcept {
+    const std::chrono::milliseconds time_per_frame{1000 / hz};
+    const std::chrono::milliseconds elapsed{static_cast<uint32_t>(timer.reset() * 1000)};
+    if (elapsed < time_per_frame) {
+        const auto sleep_time = time_per_frame - elapsed;
+        std::this_thread::sleep_for(sleep_time);
+    }
+}
 
 struct vulkan_exception_t final {
     const VkResult code;
@@ -67,11 +94,34 @@ VkResult check_present_mode(VkPhysicalDevice device, VkSurfaceKHR surface, const
                             bool& suitable) noexcept;
 
 /**
+ * @brief create 1 device with 2 queue information
+ * 
+ * @param queues queue information. 0 is for graphics, 1 is for presentation
+ * @return VkResult `VK_SUCCESS` if everything was successful
+ */
+VkResult create_device(VkPhysicalDevice physical_device,                     //
+                       const VkSurfaceKHR* surfaces, uint32_t surface_count, //
+                       VkDevice& device, VkDeviceQueueCreateInfo (&queues)[2]) noexcept;
+
+/**
+ * @param surface_format  `VK_FORMAT_B8G8R8A8_UNORM` 44, 
+ *                        `VK_FORMAT_B8G8R8A8_SRGB` 50, 
+ *                        `VK_FORMAT_A2R10G10B10_UNORM_PACK32` 58, 
+ *                        `VK_FORMAT_R16G16B16A16_SFLOAT` 97
+ */
+VkResult check_support(VkPhysicalDevice device, VkSurfaceKHR surface, //
+                       VkFormat surface_format, VkColorSpaceKHR surface_color_space,
+                       VkPresentModeKHR present_mode) noexcept;
+
+/**
  * @todo Create a new `VkDevice` with GFX, Present, Transfer queue
  */
 
-VkResult create_vertex_buffer(VkDevice device, VkBuffer& buffer, VkBufferCreateInfo& info, uint32_t length) noexcept;
-VkResult create_index_buffer(VkDevice device, VkBuffer& buffer, VkBufferCreateInfo& info, uint32_t length) noexcept;
+VkResult create_uniform_buffer(VkDevice device, VkBuffer& buffer, VkBufferCreateInfo& info,
+                               VkDeviceSize buflen) noexcept;
+VkResult create_vertex_buffer(VkDevice device, VkBuffer& buffer, VkBufferCreateInfo& info,
+                              VkDeviceSize buflen) noexcept;
+VkResult create_index_buffer(VkDevice device, VkBuffer& buffer, VkBufferCreateInfo& info, VkDeviceSize buflen) noexcept;
 
 VkResult allocate_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory& memory,
                          const VkBufferCreateInfo& buffer_info, VkFlags desired,
@@ -81,8 +131,14 @@ VkResult allocate_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory& memor
 /// @see vkBindBufferMemory
 /// @see vkMapMemory
 VkResult initialize_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, const void* data) noexcept;
+
+VkResult update_memory(VkDevice device, VkDeviceMemory memory,
+                       const VkMemoryRequirements& requirements, //
+                       const void* data, uint32_t offset = 0) noexcept;
+
 /// @see vkMapMemory
-VkResult write_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, const void* data) noexcept;
+[[deprecated]] VkResult write_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory,
+                                     const void* data) noexcept;
 
 /**
  * @brief   VkRenderPass + RAII
@@ -111,16 +167,24 @@ class vulkan_pipeline_input_t {
 
     virtual void setup_shader_stage(VkPipelineShaderStageCreateInfo (&stage)[2]) noexcept(false) = 0;
     virtual void setup_vertex_input_state(VkPipelineVertexInputStateCreateInfo& info) noexcept(false) = 0;
+    virtual VkResult make_pipeline_layout(VkDevice device, VkPipelineLayout& layout) noexcept = 0;
 
-    virtual void record(VkPipeline pipeline, VkCommandBuffer commands) noexcept(false) = 0;
+    virtual void record(VkCommandBuffer command_buffer, //
+                        VkPipeline pipeline, VkPipelineLayout pipeline_layout) noexcept(false) = 0;
+    virtual VkResult update() noexcept(false) {
+        return VK_SUCCESS;
+    };
 };
 
-auto make_pipeline_input_1(VkDevice device,                               //
+auto make_pipeline_input_1(VkDevice device,
                            const VkPhysicalDeviceMemoryProperties& props, //
                            const fs::path& folder) -> std::unique_ptr<vulkan_pipeline_input_t>;
-auto make_pipeline_input_2(VkDevice device,                               //
+auto make_pipeline_input_2(VkDevice device,
                            const VkPhysicalDeviceMemoryProperties& props, //
                            const fs::path& folder) -> std::unique_ptr<vulkan_pipeline_input_t>;
+auto make_pipeline_input_3(VkDevice device,
+                           const VkPhysicalDeviceMemoryProperties& props, //
+                           const fs::path& shader_dir) -> std::unique_ptr<vulkan_pipeline_input_t>;
 
 /**
  * @brief VkPipeline + VkPipelineLayout + RAII
@@ -155,6 +219,8 @@ class vulkan_pipeline_t final {
     [[deprecated]] static void setup_shader_stage(VkPipelineShaderStageCreateInfo (&stage)[2], //
                                                   VkShaderModule vert, VkShaderModule frag) noexcept;
     [[deprecated]] static void setup_vertex_input_state(VkPipelineVertexInputStateCreateInfo& info) noexcept;
+    [[deprecated]] static VkResult make_pipeline_layout(VkDevice device, VkPipelineLayout& layout) noexcept;
+
     static void setup_input_assembly(VkPipelineInputAssemblyStateCreateInfo& info) noexcept;
     /// @note currently using viewport & scissor have equal size
     static void setup_viewport_scissor(const VkExtent2D& extent, VkPipelineViewportStateCreateInfo& info,
@@ -163,7 +229,6 @@ class vulkan_pipeline_t final {
     static void setup_multi_sample_state(VkPipelineMultisampleStateCreateInfo& info) noexcept;
     static void setup_color_blend_state(VkPipelineColorBlendAttachmentState& attachment,
                                         VkPipelineColorBlendStateCreateInfo& info) noexcept;
-    static VkResult make_pipeline_layout(VkDevice device, VkPipelineLayout& layout) noexcept;
 };
 
 class vulkan_shader_module_t final {
@@ -248,3 +313,14 @@ VkResult render_submit(VkQueue queue,                       //
 VkResult present_submit(VkQueue queue,                                  //
                         uint32_t image_index, VkSwapchainKHR swapchain, //
                         VkSemaphore wait) noexcept;
+
+class recorder_t final {
+  public:
+    VkCommandBuffer commands;
+    VkClearValue color;
+
+  public:
+    recorder_t(VkCommandBuffer command_buffer, //
+               VkRenderPass renderpass, VkFramebuffer framebuffer, VkExtent2D extent) noexcept(false);
+    ~recorder_t() noexcept(false);
+};

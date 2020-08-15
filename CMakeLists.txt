@@ -114,7 +114,9 @@ add_custom_target(compile_shaders_glsl
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/assets
     COMMAND     ${glslc_path} --version
     COMMAND     ${glslc_path} sample.vert -o sample_vert.spv
-    COMMAND     ${glslc_path} sample.frag -o sample_frag.spv
+    COMMAND     ${glslc_path} bypass.frag -o sample_frag.spv
+    COMMAND     ${glslc_path} bypass.frag         -o bypass_frag.spv
+    COMMAND     ${glslc_path} sample_uniform.vert -o sample_uniform_vert.spv
 )
 
 enable_testing()
@@ -126,6 +128,7 @@ add_executable(graphics_test_suite
     test/test_vulkan_device.cpp
     test/test_vulkan_surface_glfw.cpp
     test/test_vulkan_pipeline.cpp
+    test/test_vulkan_descriptor_set.cpp
 )
 add_dependencies(graphics_test_suite
     compile_shaders_glsl
@@ -162,10 +165,5 @@ target_compile_definitions(graphics_test_suite
 PRIVATE
     ASSET_DIR="${PROJECT_SOURCE_DIR}/assets"
 )
-
-add_test(NAME test_glfw 
-         COMMAND graphics_test_suite "[glfw]")
-add_test(NAME test_vulkan_extensions
-         COMMAND graphics_test_suite "[extension]")
 
 # add_test(NAME test_vulkan COMMAND graphics_test_suite "[vulkan]")

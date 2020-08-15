@@ -78,8 +78,7 @@ auto read_all(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]> {
 }
 #endif
 
-auto read_all(const fs::path& p, size_t& fsize)
-    -> std::unique_ptr<std::byte[]> {
+auto read_all(const fs::path& p, size_t& fsize) -> std::unique_ptr<std::byte[]> {
     auto fin = open(p);
     return read_all(fin.get(), fsize);
 }

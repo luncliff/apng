@@ -214,7 +214,7 @@ vulkan_pipeline_t::vulkan_pipeline_t(VkDevice device, VkRenderPass renderpass, V
     info.pDepthStencilState = nullptr;
     info.pColorBlendState = &color_blend_state;
     info.pDynamicState = nullptr;
-    if (auto ec = make_pipeline_layout(device, layout))
+    if (auto ec = input.make_pipeline_layout(device, layout))
         throw vulkan_exception_t{ec, "vkCreatePipelineLayout"};
     info.layout = layout;
     info.renderPass = renderpass;
@@ -284,7 +284,7 @@ void vulkan_pipeline_t::setup_rasterization_state(VkPipelineRasterizationStateCr
     info.polygonMode = VK_POLYGON_MODE_FILL;
     info.lineWidth = 1.0f;
     info.cullMode = VK_CULL_MODE_BACK_BIT;
-    info.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // VK_FRONT_FACE_CLOCKWISE;
     info.depthBiasEnable = VK_FALSE;
     info.depthBiasConstantFactor = 0.0f;
     info.depthBiasClamp = 0.0f;
@@ -364,6 +364,93 @@ VkResult check_present_mode(VkPhysicalDevice device, VkSurfaceKHR surface, //
         }
     }
     return VK_SUCCESS;
+}
+
+VkResult check_support(VkPhysicalDevice device, VkSurfaceKHR surface, //
+                       VkFormat surface_format, VkColorSpaceKHR surface_color_space,
+                       VkPresentModeKHR present_mode) noexcept {
+    uint32_t num_formats = 0;
+    if (auto ec = vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &num_formats, nullptr))
+        return ec;
+    auto formats = make_unique<VkSurfaceFormatKHR[]>(num_formats);
+    if (auto ec = vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &num_formats, formats.get()))
+        return ec;
+    bool suitable = false;
+    for (auto i = 0u; i < num_formats; ++i) {
+        const auto& format = formats[i];
+        if (format.format == surface_format && format.colorSpace == surface_color_space) {
+            suitable = true;
+            break;
+        }
+    }
+    if (suitable == false)
+        return VK_ERROR_FORMAT_NOT_SUPPORTED;
+    uint32_t num_modes = 0;
+    if (auto ec = vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &num_modes, nullptr))
+        return ec;
+    auto modes = make_unique<VkPresentModeKHR[]>(num_modes);
+    if (auto ec = vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &num_modes, modes.get()))
+        return ec;
+    suitable = false;
+    for (auto i = 0u; i < num_modes; ++i) {
+        if (modes[i] == present_mode) {
+            suitable = true;
+            break;
+        }
+    }
+    return suitable ? VK_SUCCESS : VK_ERROR_UNKNOWN;
+};
+
+VkResult create_device(VkPhysicalDevice physical_device,                     //
+                       const VkSurfaceKHR* surfaces, uint32_t surface_count, //
+                       VkDevice& device, VkDeviceQueueCreateInfo (&queues)[2]) noexcept {
+    VkPhysicalDeviceFeatures features{};
+    vkGetPhysicalDeviceFeatures(physical_device, &features);
+    uint32_t count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, nullptr);
+    auto properties = std::make_unique<VkQueueFamilyProperties[]>(count);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, properties.get());
+    // 2 queue (gfx, present)
+    queues[0].sType = queues[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    float priority = 0;
+    queues[0].pQueuePriorities = queues[1].pQueuePriorities = &priority;
+    queues[0].queueFamilyIndex = queues[1].queueFamilyIndex = UINT32_MAX;
+    for (auto i = 0u; i < count; ++i) {
+        // graphics queue
+        if (queues[0].queueFamilyIndex == UINT32_MAX) {
+            const auto& prop = properties[i];
+            if (prop.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                queues[0].queueFamilyIndex = i;
+                queues[0].queueCount = 1;
+                continue;
+            }
+        }
+        // present queue
+        if (queues[1].queueFamilyIndex == UINT32_MAX) {
+            for (auto surface : gsl::make_span(surfaces, surface_count)) {
+                VkBool32 support = false;
+                if (auto ec = vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, surface, &support))
+                    return ec;
+                if (support == false)
+                    return VK_ERROR_UNKNOWN;
+            }
+            queues[1].queueFamilyIndex = i;
+            queues[1].queueCount = 1;
+        }
+    }
+    if (queues[0].queueFamilyIndex > count)
+        return VK_ERROR_UNKNOWN;
+    if (queues[1].queueFamilyIndex > count)
+        return VK_ERROR_UNKNOWN;
+    VkDeviceCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    info.queueCreateInfoCount = 2;
+    info.pQueueCreateInfos = queues;
+    const char* extension_names[1]{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    info.ppEnabledExtensionNames = extension_names;
+    info.enabledExtensionCount = 1;
+    info.pEnabledFeatures = &features;
+    return vkCreateDevice(physical_device, &info, nullptr, &device);
 }
 
 vulkan_shader_module_t::vulkan_shader_module_t(VkDevice _device, const fs::path fpath) noexcept(false)
@@ -508,14 +595,24 @@ vulkan_fence_t::~vulkan_fence_t() noexcept {
     vkDestroyFence(device, handle, nullptr);
 }
 
-VkResult create_vertex_buffer(VkDevice device, VkBuffer& buffer, VkBufferCreateInfo& info, uint32_t length) noexcept {
+VkResult create_uniform_buffer(VkDevice device, VkBuffer& buffer, VkBufferCreateInfo& info,
+                               VkDeviceSize length) noexcept {
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    info.size = length;
+    info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    return vkCreateBuffer(device, &info, nullptr, &buffer);
+}
+VkResult create_vertex_buffer(VkDevice device, VkBuffer& buffer, VkBufferCreateInfo& info,
+                              VkDeviceSize length) noexcept {
     info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     info.size = length;
     info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     return vkCreateBuffer(device, &info, nullptr, &buffer);
 }
-VkResult create_index_buffer(VkDevice device, VkBuffer& buffer, VkBufferCreateInfo& info, uint32_t length) noexcept {
+VkResult create_index_buffer(VkDevice device, VkBuffer& buffer, VkBufferCreateInfo& info,
+                             VkDeviceSize length) noexcept {
     info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     info.size = length;
     info.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
@@ -544,20 +641,25 @@ VkResult allocate_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory& memor
     return vkAllocateMemory(device, &info, nullptr, &memory);
 }
 
+VkResult update_memory(VkDevice device, VkDeviceMemory memory,
+                       const VkMemoryRequirements& requirements, //
+                       const void* data, uint32_t offset) noexcept {
+    const auto flags = VkMemoryMapFlags{};
+    void* dst = nullptr;
+    if (auto ec = vkMapMemory(device, memory, offset, requirements.size, flags, &dst))
+        return ec;
+    memcpy(dst, data, requirements.size);
+    vkUnmapMemory(device, memory);
+    return VK_SUCCESS;
+}
+
 VkResult initialize_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, const void* data) noexcept {
     constexpr auto offset = 0;
     if (auto ec = vkBindBufferMemory(device, buffer, memory, offset))
         return ec;
     VkMemoryRequirements requirements{};
     vkGetBufferMemoryRequirements(device, buffer, &requirements);
-    const auto flags = VkMemoryMapFlags{};
-    void* dst = nullptr;
-    if (auto ec = vkMapMemory(device, memory, offset, requirements.size, //
-                              flags, &dst))
-        return ec;
-    memcpy(dst, data, requirements.size);
-    vkUnmapMemory(device, memory);
-    return VK_SUCCESS;
+    return update_memory(device, memory, requirements, data, offset);
 }
 
 VkResult write_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, const void* data) noexcept {
@@ -607,4 +709,28 @@ VkResult present_submit(VkQueue queue,                                  //
     info.swapchainCount = 1;
     info.pImageIndices = &image_index;
     return vkQueuePresentKHR(queue, &info);
+}
+
+recorder_t::recorder_t(VkCommandBuffer command_buffer, //
+                       VkRenderPass renderpass, VkFramebuffer framebuffer, VkExtent2D extent) noexcept(false)
+    : commands{command_buffer}, color{0.0f, 0.0f, 0.0f, 1.0f} {
+    VkCommandBufferBeginInfo begin{};
+    begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    if (auto ec = vkBeginCommandBuffer(commands, &begin))
+        throw vulkan_exception_t{ec, "vkBeginCommandBuffer"};
+    VkRenderPassBeginInfo render{};
+    render.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    render.renderPass = renderpass;
+    render.framebuffer = framebuffer;
+    render.renderArea.offset = {0, 0}; // consider shader (loads/stores)
+    render.renderArea.extent = extent;
+    render.clearValueCount = 1;
+    render.pClearValues = &color;
+    vkCmdBeginRenderPass(commands, &render, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+recorder_t::~recorder_t() noexcept(false) {
+    vkCmdEndRenderPass(commands);
+    if (auto ec = vkEndCommandBuffer(commands))
+        throw vulkan_exception_t{ec, "vkEndCommandBuffer"};
 }

@@ -51,60 +51,6 @@ TEST_CASE("RenderPass + Pipeline", "[vulkan]") {
     REQUIRE(pipeline.handle);
 }
 
-class stop_watch_t final {
-    clock_t begin = clock(); // <time.h>
-
-  public:
-    float pick() const noexcept {
-        auto current = clock();
-        return static_cast<float>(current - begin) / CLOCKS_PER_SEC;
-    }
-    float reset() noexcept {
-        const auto d = pick();
-        begin = clock();
-        return d;
-    }
-};
-
-void sleep_for_fps(stop_watch_t& timer, uint32_t hz) noexcept {
-    const chrono::milliseconds time_per_frame{1000 / hz};
-    const chrono::milliseconds elapsed{static_cast<uint32_t>(timer.reset() * 1000)};
-    if (elapsed < time_per_frame) {
-        const auto sleep_time = time_per_frame - elapsed;
-        this_thread::sleep_for(sleep_time);
-    }
-}
-
-class recorder_t final {
-  public:
-    VkCommandBuffer commands;
-    VkClearValue color{0.0f, 0.0f, 0.0f, 1.0f};
-
-  public:
-    recorder_t(VkCommandBuffer command_buffer, //
-               VkRenderPass renderpass, VkFramebuffer framebuffer, VkExtent2D extent) noexcept(false)
-        : commands{command_buffer} {
-        VkCommandBufferBeginInfo begin{};
-        begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        if (auto ec = vkBeginCommandBuffer(commands, &begin))
-            throw vulkan_exception_t{ec, "vkBeginCommandBuffer"};
-        VkRenderPassBeginInfo render{};
-        render.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        render.renderPass = renderpass;
-        render.framebuffer = framebuffer;
-        render.renderArea.offset = {0, 0}; // consider shader (loads/stores)
-        render.renderArea.extent = extent;
-        render.clearValueCount = 1;
-        render.pClearValues = &color;
-        vkCmdBeginRenderPass(commands, &render, VK_SUBPASS_CONTENTS_INLINE);
-    }
-    ~recorder_t() noexcept(false) {
-        vkCmdEndRenderPass(commands);
-        if (auto ec = vkEndCommandBuffer(commands))
-            throw vulkan_exception_t{ec, "vkEndCommandBuffer"};
-    }
-};
-
 TEST_CASE("Render Offscreen", "[vulkan]") {
     // instance / physical device
     const char* layers[1]{"VK_LAYER_KHRONOS_validation"};
@@ -218,7 +164,7 @@ TEST_CASE("Render Offscreen", "[vulkan]") {
     for (auto i = 0u; i < num_images; ++i) {
         recorder_t recorder{command_pool.buffers[i], renderpass.handle, framebuffers[i], image_extent};
         vkCmdBindPipeline(recorder.commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
-        input->record(pipeline.handle, recorder.commands);
+        input->record(recorder.commands, pipeline.handle, pipeline.layout);
     }
     // render + wait
     vulkan_fence_t fence{device};
@@ -312,7 +258,7 @@ TEST_CASE("render single surface", "[vulkan][glfw]") {
             recorder_t recorder{command_pool.buffers[i], renderpass.handle, presentation->framebuffers[i],
                                 capabilities.maxImageExtent};
             vkCmdBindPipeline(recorder.commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
-            input->record(pipeline.handle, recorder.commands);
+            input->record(recorder.commands, pipeline.handle, pipeline.layout);
         }
 
         // synchronization + timer
@@ -380,101 +326,6 @@ void print_debug(spdlog::logger& stream, const VkSurfaceFormatKHR& format) {
         break;
     }
     stream.debug(" - colorspace: {}", format.colorSpace);
-}
-
-VkResult check_support(VkPhysicalDevice device, VkSurfaceKHR surface, //
-                       VkFormat surface_format, VkColorSpaceKHR surface_color_space, VkPresentModeKHR present_mode) {
-    auto stream = get_current_stream();
-    uint32_t num_formats = 0;
-    if (auto ec = vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &num_formats, nullptr))
-        return ec;
-    auto formats = make_unique<VkSurfaceFormatKHR[]>(num_formats);
-    if (auto ec = vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &num_formats, formats.get()))
-        return ec;
-    bool suitable = false;
-    for (auto i = 0u; i < num_formats; ++i) {
-        const auto& format = formats[i];
-        if (format.format == surface_format && format.colorSpace == surface_color_space) {
-            suitable = true;
-            break;
-        }
-    }
-    if (suitable == false)
-        return VK_ERROR_FORMAT_NOT_SUPPORTED;
-    uint32_t num_modes = 0;
-    if (auto ec = vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &num_modes, nullptr))
-        return ec;
-    auto modes = make_unique<VkPresentModeKHR[]>(num_modes);
-    if (auto ec = vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &num_modes, modes.get()))
-        return ec;
-    suitable = false;
-    for (auto i = 0u; i < num_modes; ++i) {
-        if (modes[i] == present_mode) {
-            suitable = true;
-            break;
-        }
-    }
-    if (suitable == false)
-        return VK_ERROR_UNKNOWN;
-    return VK_SUCCESS;
-};
-
-/**
- * @brief create 1 device with 2 queue information
- * 
- * @param queues queue information. 0 is for graphics, 1 is for presentation
- * @return VkResult `VK_SUCCESS` if everything was successful
- */
-VkResult create_device(VkPhysicalDevice physical_device,                     //
-                       const VkSurfaceKHR* surfaces, uint32_t surface_count, //
-                       VkDevice& device, VkDeviceQueueCreateInfo (&queues)[2]) {
-    VkPhysicalDeviceFeatures features{};
-    vkGetPhysicalDeviceFeatures(physical_device, &features);
-    uint32_t count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, nullptr);
-    auto properties = std::make_unique<VkQueueFamilyProperties[]>(count);
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, properties.get());
-    // 2 queue (gfx, present)
-    queues[0].sType = queues[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    float priority = 0;
-    queues[0].pQueuePriorities = queues[1].pQueuePriorities = &priority;
-    queues[0].queueFamilyIndex = queues[1].queueFamilyIndex = UINT32_MAX;
-    for (auto i = 0u; i < count; ++i) {
-        // graphics queue
-        if (queues[0].queueFamilyIndex == UINT32_MAX) {
-            const auto& prop = properties[i];
-            if (prop.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-                queues[0].queueFamilyIndex = i;
-                queues[0].queueCount = 1;
-                continue;
-            }
-        }
-        // present queue
-        if (queues[1].queueFamilyIndex == UINT32_MAX) {
-            for (auto surface : gsl::make_span(surfaces, surface_count)) {
-                VkBool32 support = false;
-                if (auto ec = vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, surface, &support))
-                    return ec;
-                if (support == false)
-                    return VK_ERROR_UNKNOWN;
-            }
-            queues[1].queueFamilyIndex = i;
-            queues[1].queueCount = 1;
-        }
-    }
-    if (queues[0].queueFamilyIndex > count)
-        return VK_ERROR_UNKNOWN;
-    if (queues[1].queueFamilyIndex > count)
-        return VK_ERROR_UNKNOWN;
-    VkDeviceCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    info.queueCreateInfoCount = 2;
-    info.pQueueCreateInfos = queues;
-    const char* extension_names[1]{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
-    info.ppEnabledExtensionNames = extension_names;
-    info.enabledExtensionCount = 1;
-    info.pEnabledFeatures = &features;
-    return vkCreateDevice(physical_device, &info, nullptr, &device);
 }
 
 TEST_CASE("render multiple surface", "[vulkan][glfw]") {
@@ -556,7 +407,7 @@ TEST_CASE("render multiple surface", "[vulkan][glfw]") {
                                 renderpass.handle, presentation->framebuffers[i],
                                 surfaces[i].capabilities.maxImageExtent};
             vkCmdBindPipeline(recorder.commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
-            input.record(pipeline.handle, recorder.commands);
+            input.record(recorder.commands, pipeline.handle, pipeline.layout);
         }
         // synchronization + timer
         stop_watch_t timer{};
