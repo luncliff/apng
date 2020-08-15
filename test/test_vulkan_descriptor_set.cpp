@@ -6,6 +6,7 @@
 #include <spdlog/spdlog.h>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <tiny_gltf.h>
 
 #include "vulkan_1.h"
 
@@ -80,14 +81,8 @@ TEST_CASE("descriptor set", "[vulkan][glfw]") {
     });
 
     // command buffer
+    //  recording will be performed in 'update' steps
     vulkan_command_pool_t command_pool{device, qinfos[0].queueFamilyIndex, presentation->num_images};
-    for (auto i = 0u; i < presentation->num_images; ++i) {
-        // record: command buffer + renderpass + pipeline
-        recorder_t recorder{command_pool.buffers[i], renderpass.handle, presentation->framebuffers[i],
-                            surface.capabilities.maxImageExtent};
-        vkCmdBindPipeline(recorder.commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
-        input->record(recorder.commands, pipeline.handle, pipeline.layout);
-    }
 
     // synchronization + timer
     stop_watch_t timer{};
@@ -98,22 +93,34 @@ TEST_CASE("descriptor set", "[vulkan][glfw]") {
     auto repeat = 120u;
     GLFWwindow* window = surface.impl.get();
     while (!glfwWindowShouldClose(window) && repeat--) {
+        /// update
         glfwPollEvents();
+        if (auto ec = input->update())
+            FAIL(ec);
+
         /// render: select command buffer for current image and submit to GFX queue
-        uint32_t image_index{};
+        uint32_t idx{};
         {
-            if (auto ec = vkAcquireNextImageKHR(device, swapchain->handle, UINT64_MAX, semaphore_1.handle,
-                                                VK_NULL_HANDLE, &image_index))
+            if (auto ec = vkAcquireNextImageKHR(device, swapchain->handle, UINT64_MAX, //
+                                                semaphore_1.handle, VK_NULL_HANDLE, &idx))
                 FAIL(ec);
-            if (auto ec = render_submit(queues[0],                                                   //
-                                        gsl::make_span(command_pool.buffers.get() + image_index, 1), //
+            // record + submit
+            {
+                vulkan_command_recorder_t recorder{command_pool.buffers[idx], renderpass.handle,
+                                                   presentation->framebuffers[idx],
+                                                   surface.capabilities.maxImageExtent};
+                vkCmdBindPipeline(recorder.commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
+                input->record(recorder.commands, pipeline.handle, pipeline.layout);
+            }
+            if (auto ec = render_submit(queues[0],                                           //
+                                        gsl::make_span(command_pool.buffers.get() + idx, 1), //
                                         fence.handle, semaphore_1.handle, semaphore_2.handle))
                 FAIL(ec);
         }
         /// present: semaphore for synchronization and request presentation
         {
             // glfwSwapBuffers(window);
-            if (auto ec = present_submit(queues[1], image_index, swapchain->handle, semaphore_2.handle))
+            if (auto ec = present_submit(queues[1], idx, swapchain->handle, semaphore_2.handle))
                 FAIL(ec);
             if (auto ec = vkQueueWaitIdle(queues[1]))
                 FAIL(ec);

@@ -130,8 +130,6 @@ VkResult allocate_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory& memor
 /// @todo https://vulkan-tutorial.com/en/Vertex_buffers/Staging_buffer
 /// @see vkBindBufferMemory
 /// @see vkMapMemory
-VkResult initialize_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, const void* data) noexcept;
-
 VkResult update_memory(VkDevice device, VkDeviceMemory memory,
                        const VkMemoryRequirements& requirements, //
                        const void* data, uint32_t offset = 0) noexcept;
@@ -314,13 +312,13 @@ VkResult present_submit(VkQueue queue,                                  //
                         uint32_t image_index, VkSwapchainKHR swapchain, //
                         VkSemaphore wait) noexcept;
 
-class recorder_t final {
+class vulkan_command_recorder_t final {
   public:
     VkCommandBuffer commands;
-    VkClearValue color;
+    VkClearValue clear;
 
   public:
-    recorder_t(VkCommandBuffer command_buffer, //
-               VkRenderPass renderpass, VkFramebuffer framebuffer, VkExtent2D extent) noexcept(false);
-    ~recorder_t() noexcept(false);
+    vulkan_command_recorder_t(VkCommandBuffer command_buffer, //
+                              VkRenderPass renderpass, VkFramebuffer framebuffer, VkExtent2D extent) noexcept(false);
+    ~vulkan_command_recorder_t() noexcept(false);
 };

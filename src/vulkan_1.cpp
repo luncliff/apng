@@ -1,4 +1,5 @@
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <memory>
 #include <vector>
 
@@ -97,7 +98,12 @@ struct input1_t : vulkan_pipeline_input_t {
         return allocate_memory(device, buffer, memory, buffer_info, desired, props);
     }
     VkResult write_memory(VkBuffer buffer, VkDeviceMemory memory) const noexcept {
-        return ::initialize_memory(device, buffer, memory, vertices.data());
+        constexpr auto offset = 0;
+        if (auto ec = vkBindBufferMemory(device, buffer, memory, offset))
+            return ec;
+        VkMemoryRequirements requirements{};
+        vkGetBufferMemoryRequirements(device, buffer, &requirements);
+        return update_memory(device, memory, requirements, vertices.data(), offset);
     }
 
     void record(VkCommandBuffer command_buffer, VkPipeline pipeline, VkPipelineLayout) noexcept override {
@@ -158,26 +164,37 @@ struct input2_t : vulkan_pipeline_input_t {
         // we need these flags to use `write_memory`
         const auto desired = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
         VkBufferCreateInfo buffer_info{};
+        VkMemoryRequirements requirements{};
         // vertices
-        const uint32_t vidx = 0;
-        const uint32_t vbufsize = sizeof(input_unit_t) * vertices.size();
-        if (auto ec = create_vertex_buffer(device, buffers[vidx], //
-                                           buffer_info, vbufsize))
-            throw vulkan_exception_t{ec, "vkCreateBuffer"};
-        if (auto ec = allocate_memory(device, buffers[vidx], memories[vidx], buffer_info, desired, props))
-            throw vulkan_exception_t{ec, "vkAllocateMemory"};
-        if (auto ec = initialize_memory(device, buffers[vidx], memories[vidx], vertices.data()))
-            throw vulkan_exception_t{ec, "vkBindBufferMemory || vkMapMemory"};
+        {
+            const uint32_t vidx = 0;
+            const uint32_t vbufsize = sizeof(input_unit_t) * vertices.size();
+            if (auto ec = create_vertex_buffer(device, buffers[vidx], //
+                                               buffer_info, vbufsize))
+                throw vulkan_exception_t{ec, "vkCreateBuffer"};
+            if (auto ec = allocate_memory(device, buffers[vidx], memories[vidx], buffer_info, desired, props))
+                throw vulkan_exception_t{ec, "vkAllocateMemory"};
+            if (auto ec = vkBindBufferMemory(device, buffers[vidx], memories[vidx], 0))
+                throw vulkan_exception_t{ec, "vkBindBufferMemory"};
+            vkGetBufferMemoryRequirements(device, buffers[vidx], &requirements);
+            if (auto ec = update_memory(device, memories[vidx], requirements, vertices.data(), 0))
+                throw vulkan_exception_t{ec, "vkMapMemory"};
+        }
         // indices
-        const uint32_t iidx = 1;
-        const uint32_t ibufsize = sizeof(uint16_t) * indices.size();
-        if (auto ec = create_index_buffer(device, buffers[iidx], //
-                                          buffer_info, ibufsize))
-            throw vulkan_exception_t{ec, "vkCreateBuffer"};
-        if (auto ec = allocate_memory(device, buffers[iidx], memories[iidx], buffer_info, desired, props))
-            throw vulkan_exception_t{ec, "vkAllocateMemory"};
-        if (auto ec = initialize_memory(device, buffers[iidx], memories[iidx], indices.data()))
-            throw vulkan_exception_t{ec, "vkBindBufferMemory || vkMapMemory"};
+        {
+            const uint32_t iidx = 1;
+            const uint32_t ibufsize = sizeof(uint16_t) * indices.size();
+            if (auto ec = create_index_buffer(device, buffers[iidx], //
+                                              buffer_info, ibufsize))
+                throw vulkan_exception_t{ec, "vkCreateBuffer"};
+            if (auto ec = allocate_memory(device, buffers[iidx], memories[iidx], buffer_info, desired, props))
+                throw vulkan_exception_t{ec, "vkAllocateMemory"};
+            if (auto ec = vkBindBufferMemory(device, buffers[iidx], memories[iidx], 0))
+                throw vulkan_exception_t{ec, "vkBindBufferMemory"};
+            vkGetBufferMemoryRequirements(device, buffers[iidx], &requirements);
+            if (auto ec = update_memory(device, memories[iidx], requirements, indices.data(), 0))
+                throw vulkan_exception_t{ec, "vkMapMemory"};
+        }
     }
 
     void setup_shader_stage(VkPipelineShaderStageCreateInfo (&stage)[2]) noexcept(false) override {
@@ -327,20 +344,23 @@ struct input3_t : vulkan_pipeline_input_t {
     }
 
     void allocate(const VkPhysicalDeviceMemoryProperties& props) noexcept(false) {
-        // we need these flags to use `write_memory`
         const auto desired = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
         VkBufferCreateInfo buffer_info{};
+        VkMemoryRequirements requirements{};
         // uniform
-        uniform_t ubo{};
-        ubo.model = ubo.view = ubo.projection = glm::mat4{1}; // identity
-        ubo.projection[1][1] *= -1;                           // GL -> Vk coordinate
-        if (auto ec = create_uniform_buffer(device, buffers[0], buffer_info, sizeof(uniform_t)))
-            throw vulkan_exception_t{ec, "vkCreateBuffer"};
-        if (auto ec = allocate_memory(device, buffers[0], memories[0], buffer_info, desired, props))
-            throw vulkan_exception_t{ec, "vkAllocateMemory"};
-        if (auto ec = initialize_memory(device, buffers[0], memories[0], &ubo))
-            throw vulkan_exception_t{ec, "vkBindBufferMemory || vkMapMemory"};
         {
+            uniform_t ubo{};
+            ubo.model = ubo.view = ubo.projection = glm::mat4{1};
+            ubo.projection[1][1] *= -1; // GL -> Vulkan
+            if (auto ec = create_uniform_buffer(device, buffers[0], buffer_info, sizeof(uniform_t)))
+                throw vulkan_exception_t{ec, "vkCreateBuffer"};
+            if (auto ec = allocate_memory(device, buffers[0], memories[0], buffer_info, desired, props))
+                throw vulkan_exception_t{ec, "vkAllocateMemory"};
+            if (auto ec = vkBindBufferMemory(device, buffers[0], memories[0], 0))
+                throw vulkan_exception_t{ec, "vkBindBufferMemory"};
+            vkGetBufferMemoryRequirements(device, buffers[0], &requirements);
+            if (auto ec = update_memory(device, memories[0], requirements, &ubo, 0))
+                throw vulkan_exception_t{ec, "vkMapMemory"};
             // descriptor set must be updated (before being used with Command Buffer)
             VkDescriptorBufferInfo change{};
             change.buffer = buffers[0];
@@ -357,26 +377,36 @@ struct input3_t : vulkan_pipeline_input_t {
             vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
         }
         // vertices
-        const vector<input_unit_t> vertices{{{-0.8f, -0.9f}, {1, 0, 0}},
-                                            {{0.8f, -0.9f}, {0, 1, 0}},
-                                            {{0.8f, 0.9f}, {0, 0, 1}},
-                                            {{-0.8f, 0.9f}, {1, 1, 1}}};
-        if (auto ec = create_vertex_buffer(device, buffers[1], //
-                                           buffer_info, sizeof(input_unit_t) * vertices.size()))
-            throw vulkan_exception_t{ec, "vkCreateBuffer"};
-        if (auto ec = allocate_memory(device, buffers[1], memories[1], buffer_info, desired, props))
-            throw vulkan_exception_t{ec, "vkAllocateMemory"};
-        if (auto ec = initialize_memory(device, buffers[1], memories[1], vertices.data()))
-            throw vulkan_exception_t{ec, "vkBindBufferMemory || vkMapMemory"};
+        {
+            const vector<input_unit_t> vertices{{{-0.8f, -0.9f}, {1, 0, 0}},
+                                                {{0.8f, -0.9f}, {0, 1, 0}},
+                                                {{0.8f, 0.9f}, {0, 0, 1}},
+                                                {{-0.8f, 0.9f}, {1, 1, 1}}};
+            if (auto ec = create_vertex_buffer(device, buffers[1], //
+                                               buffer_info, sizeof(input_unit_t) * vertices.size()))
+                throw vulkan_exception_t{ec, "vkCreateBuffer"};
+            if (auto ec = allocate_memory(device, buffers[1], memories[1], buffer_info, desired, props))
+                throw vulkan_exception_t{ec, "vkAllocateMemory"};
+            if (auto ec = vkBindBufferMemory(device, buffers[1], memories[1], 0))
+                throw vulkan_exception_t{ec, "vkBindBufferMemory"};
+            vkGetBufferMemoryRequirements(device, buffers[1], &requirements);
+            if (auto ec = update_memory(device, memories[1], requirements, vertices.data(), 0))
+                throw vulkan_exception_t{ec, "vkMapMemory"};
+        }
         // indices
-        const vector<uint16_t> indices{0, 1, 2, 2, 3, 0};
-        if (auto ec = create_index_buffer(device, buffers[2], //
-                                          buffer_info, sizeof(uint16_t) * indices.size()))
-            throw vulkan_exception_t{ec, "vkCreateBuffer"};
-        if (auto ec = allocate_memory(device, buffers[2], memories[2], buffer_info, desired, props))
-            throw vulkan_exception_t{ec, "vkAllocateMemory"};
-        if (auto ec = initialize_memory(device, buffers[2], memories[2], indices.data()))
-            throw vulkan_exception_t{ec, "vkBindBufferMemory || vkMapMemory"};
+        {
+            const vector<uint16_t> indices{0, 1, 2, 2, 3, 0};
+            if (auto ec = create_index_buffer(device, buffers[2], //
+                                              buffer_info, sizeof(uint16_t) * indices.size()))
+                throw vulkan_exception_t{ec, "vkCreateBuffer"};
+            if (auto ec = allocate_memory(device, buffers[2], memories[2], buffer_info, desired, props))
+                throw vulkan_exception_t{ec, "vkAllocateMemory"};
+            if (auto ec = vkBindBufferMemory(device, buffers[2], memories[2], 0))
+                throw vulkan_exception_t{ec, "vkBindBufferMemory"};
+            vkGetBufferMemoryRequirements(device, buffers[2], &requirements);
+            if (auto ec = update_memory(device, memories[2], requirements, indices.data(), 0))
+                throw vulkan_exception_t{ec, "vkMapMemory"};
+        }
     }
 
     void setup_shader_stage(VkPipelineShaderStageCreateInfo (&stage)[2]) noexcept(false) override {
@@ -426,8 +456,12 @@ struct input3_t : vulkan_pipeline_input_t {
 
     VkResult update() noexcept(false) override {
         uniform_t ubo{};
-        ubo.model = ubo.view = ubo.projection = glm::mat4{1};
-        ubo.projection[1][1] *= -1;
+        const float time = clock() / 1900;
+        const auto Z = glm::vec3(0, 0, 1);
+        ubo.model = glm::rotate(glm::mat4(1), glm::radians(time), Z);
+        ubo.view = glm::lookAt(glm::vec3(2, 2, 2), glm::vec3(0), Z);
+        ubo.projection = glm::perspective(glm::radians(45.0f), 1.0f / 1, 0.1f, 10.0f);
+        ubo.projection[1][1] *= -1; // GL -> Vulkan
 
         VkMemoryRequirements requirements{};
         vkGetBufferMemoryRequirements(device, buffers[0], &requirements);

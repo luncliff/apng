@@ -162,7 +162,7 @@ TEST_CASE("Render Offscreen", "[vulkan]") {
     // command buffer
     vulkan_command_pool_t command_pool{device, index, num_images};
     for (auto i = 0u; i < num_images; ++i) {
-        recorder_t recorder{command_pool.buffers[i], renderpass.handle, framebuffers[i], image_extent};
+        vulkan_command_recorder_t recorder{command_pool.buffers[i], renderpass.handle, framebuffers[i], image_extent};
         vkCmdBindPipeline(recorder.commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
         input->record(recorder.commands, pipeline.handle, pipeline.layout);
     }
@@ -241,7 +241,6 @@ TEST_CASE("render single surface", "[vulkan][glfw]") {
 
     // recreate swapchain and presentation multiple times
     for (auto i = 0; i < 1; ++i) {
-        stream->warn("current format: {}", surface_format);
         auto swapchain = make_unique<vulkan_swapchain_t>(device, surface, capabilities, surface_format,
                                                          surface_color_space, present_mode);
         auto presentation = make_unique<vulkan_presentation_t>(device, renderpass.handle, swapchain->handle,
@@ -255,8 +254,8 @@ TEST_CASE("render single surface", "[vulkan][glfw]") {
         vulkan_command_pool_t command_pool{device, graphics_index, presentation->num_images};
         for (auto i = 0u; i < presentation->num_images; ++i) {
             // record: command buffer + renderpass + pipeline
-            recorder_t recorder{command_pool.buffers[i], renderpass.handle, presentation->framebuffers[i],
-                                capabilities.maxImageExtent};
+            vulkan_command_recorder_t recorder{command_pool.buffers[i], renderpass.handle,
+                                               presentation->framebuffers[i], capabilities.maxImageExtent};
             vkCmdBindPipeline(recorder.commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
             input->record(recorder.commands, pipeline.handle, pipeline.layout);
         }
@@ -403,9 +402,9 @@ TEST_CASE("render multiple surface", "[vulkan][glfw]") {
         vulkan_command_pool_t command_pool{device, queue_infos[0].queueFamilyIndex, presentation->num_images};
         for (auto i = 0u; i < presentation->num_images; ++i) {
             // record: command buffer + renderpass + pipeline
-            recorder_t recorder{command_pool.buffers[i], //
-                                renderpass.handle, presentation->framebuffers[i],
-                                surfaces[i].capabilities.maxImageExtent};
+            vulkan_command_recorder_t recorder{command_pool.buffers[i], //
+                                               renderpass.handle, presentation->framebuffers[i],
+                                               surfaces[i].capabilities.maxImageExtent};
             vkCmdBindPipeline(recorder.commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
             input.record(recorder.commands, pipeline.handle, pipeline.layout);
         }

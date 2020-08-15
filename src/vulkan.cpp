@@ -284,7 +284,8 @@ void vulkan_pipeline_t::setup_rasterization_state(VkPipelineRasterizationStateCr
     info.polygonMode = VK_POLYGON_MODE_FILL;
     info.lineWidth = 1.0f;
     info.cullMode = VK_CULL_MODE_BACK_BIT;
-    info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // VK_FRONT_FACE_CLOCKWISE;
+    // info.frontFace = VK_FRONT_FACE_CLOCKWISE; // GL coordinate
+    info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // Vulkan coordinate
     info.depthBiasEnable = VK_FALSE;
     info.depthBiasConstantFactor = 0.0f;
     info.depthBiasClamp = 0.0f;
@@ -553,6 +554,7 @@ vulkan_command_pool_t::vulkan_command_pool_t(VkDevice _device, uint32_t queue_in
     {
         VkCommandPoolCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         info.queueFamilyIndex = queue_index;
         if (auto ec = vkCreateCommandPool(device, &info, nullptr, &handle))
             throw vulkan_exception_t{ec, "vkCreateCommandPool"};
@@ -653,15 +655,6 @@ VkResult update_memory(VkDevice device, VkDeviceMemory memory,
     return VK_SUCCESS;
 }
 
-VkResult initialize_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, const void* data) noexcept {
-    constexpr auto offset = 0;
-    if (auto ec = vkBindBufferMemory(device, buffer, memory, offset))
-        return ec;
-    VkMemoryRequirements requirements{};
-    vkGetBufferMemoryRequirements(device, buffer, &requirements);
-    return update_memory(device, memory, requirements, data, offset);
-}
-
 VkResult write_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, const void* data) noexcept {
     constexpr auto offset = 0;
     VkMemoryRequirements requirements{};
@@ -711,9 +704,10 @@ VkResult present_submit(VkQueue queue,                                  //
     return vkQueuePresentKHR(queue, &info);
 }
 
-recorder_t::recorder_t(VkCommandBuffer command_buffer, //
-                       VkRenderPass renderpass, VkFramebuffer framebuffer, VkExtent2D extent) noexcept(false)
-    : commands{command_buffer}, color{0.0f, 0.0f, 0.0f, 1.0f} {
+vulkan_command_recorder_t::vulkan_command_recorder_t(VkCommandBuffer command_buffer, //
+                                                     VkRenderPass renderpass, VkFramebuffer framebuffer,
+                                                     VkExtent2D extent) noexcept(false)
+    : commands{command_buffer}, clear{} {
     VkCommandBufferBeginInfo begin{};
     begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     if (auto ec = vkBeginCommandBuffer(commands, &begin))
@@ -725,11 +719,15 @@ recorder_t::recorder_t(VkCommandBuffer command_buffer, //
     render.renderArea.offset = {0, 0}; // consider shader (loads/stores)
     render.renderArea.extent = extent;
     render.clearValueCount = 1;
-    render.pClearValues = &color;
+    clear.color.float32[0] = 0;
+    clear.color.float32[1] = 0;
+    clear.color.float32[2] = 0;
+    clear.color.float32[3] = 1;
+    render.pClearValues = &clear;
     vkCmdBeginRenderPass(commands, &render, VK_SUBPASS_CONTENTS_INLINE);
 }
 
-recorder_t::~recorder_t() noexcept(false) {
+vulkan_command_recorder_t::~vulkan_command_recorder_t() noexcept(false) {
     vkCmdEndRenderPass(commands);
     if (auto ec = vkEndCommandBuffer(commands))
         throw vulkan_exception_t{ec, "vkEndCommandBuffer"};
