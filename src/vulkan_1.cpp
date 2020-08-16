@@ -7,6 +7,38 @@
 
 using namespace std;
 
+void setup_shader_stage(VkPipelineShaderStageCreateInfo (&stage)[2], VkShaderModule vert,
+                        VkShaderModule frag) noexcept {
+    stage[0].sType = stage[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stage[0].pName = stage[1].pName = "main";
+    // for vertex shader
+    stage[0].pSpecializationInfo = nullptr;
+    stage[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    stage[0].module = vert;
+    // for fragment shader
+    stage[1].pSpecializationInfo = nullptr;
+    stage[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    stage[1].module = frag;
+}
+
+void setup_vertex_input_state(VkPipelineVertexInputStateCreateInfo& info) noexcept {
+    info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    if (info.vertexBindingDescriptionCount)
+        info.pVertexBindingDescriptions = nullptr;
+    if (info.vertexAttributeDescriptionCount)
+        info.pVertexAttributeDescriptions = nullptr;
+}
+
+VkResult create_pipeline_layout(VkDevice device, VkPipelineLayout& layout) noexcept {
+    VkPipelineLayoutCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    info.setLayoutCount = 0;
+    info.pSetLayouts = nullptr;
+    info.pushConstantRangeCount = 0;
+    info.pPushConstantRanges = nullptr;
+    return vkCreatePipelineLayout(device, &info, nullptr, &layout);
+}
+
 struct input1_t : vulkan_pipeline_input_t {
     struct input_unit_t final {
         glm::vec2 position{};
@@ -87,7 +119,7 @@ struct input1_t : vulkan_pipeline_input_t {
     }
 
     VkResult make_pipeline_layout(VkDevice device, VkPipelineLayout& layout) noexcept override {
-        return vulkan_pipeline_t::make_pipeline_layout(device, layout);
+        return ::create_pipeline_layout(device, layout);
     }
 
     VkResult create_buffer(VkBuffer& buffer, VkBufferCreateInfo& info) const noexcept {
@@ -117,8 +149,8 @@ struct input1_t : vulkan_pipeline_input_t {
     }
 };
 
-auto make_pipeline_input_1(VkDevice device, const VkPhysicalDeviceMemoryProperties& props, const fs::path& shader_dir)
-    -> unique_ptr<vulkan_pipeline_input_t> {
+auto make_pipeline_input_1(VkDevice device, const VkPhysicalDeviceMemoryProperties& props,
+                           const fs::path& shader_dir) noexcept(false) -> unique_ptr<vulkan_pipeline_input_t> {
     return make_unique<input1_t>(device, props, shader_dir);
 }
 
@@ -233,7 +265,7 @@ struct input2_t : vulkan_pipeline_input_t {
     }
 
     VkResult make_pipeline_layout(VkDevice device, VkPipelineLayout& layout) noexcept override {
-        return vulkan_pipeline_t::make_pipeline_layout(device, layout);
+        return ::create_pipeline_layout(device, layout);
     }
 
     void record(VkCommandBuffer command_buffer, VkPipeline pipeline, VkPipelineLayout) noexcept override {
@@ -254,8 +286,8 @@ struct input2_t : vulkan_pipeline_input_t {
     }
 };
 
-auto make_pipeline_input_2(VkDevice device, const VkPhysicalDeviceMemoryProperties& props, const fs::path& shader_dir)
-    -> unique_ptr<vulkan_pipeline_input_t> {
+auto make_pipeline_input_2(VkDevice device, const VkPhysicalDeviceMemoryProperties& props,
+                           const fs::path& shader_dir) noexcept(false) -> unique_ptr<vulkan_pipeline_input_t> {
     auto impl = make_unique<input2_t>(device, shader_dir);
     impl->allocate(props);
     return impl;
@@ -454,7 +486,7 @@ struct input3_t : vulkan_pipeline_input_t {
         return vkCreatePipelineLayout(device, &info, nullptr, &layout);
     }
 
-    VkResult update() noexcept(false) override {
+    VkResult update() noexcept override {
         uniform_t ubo{};
         const float time = static_cast<float>(clock()) / 1900;
         const auto Z = glm::vec3(0, 0, 1);
@@ -508,9 +540,15 @@ struct input3_t : vulkan_pipeline_input_t {
     }
 };
 
-auto make_pipeline_input_3(VkDevice device, const VkPhysicalDeviceMemoryProperties& props, const fs::path& shader_dir)
-    -> unique_ptr<vulkan_pipeline_input_t> {
+auto make_pipeline_input_3(VkDevice device, const VkPhysicalDeviceMemoryProperties& props,
+                           const fs::path& shader_dir) noexcept(false) -> unique_ptr<vulkan_pipeline_input_t> {
     auto impl = make_unique<input3_t>(device, shader_dir);
     impl->allocate(props);
     return impl;
+}
+
+auto make_pipeline_input_4(VkDevice device, const VkPhysicalDeviceMemoryProperties& props,
+                           const fs::path& shader_dir) noexcept(false) -> std::unique_ptr<vulkan_pipeline_input2_t> {
+    throw std::runtime_error{"not implemented"};
+    return nullptr;
 }

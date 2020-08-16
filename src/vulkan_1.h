@@ -163,20 +163,29 @@ class vulkan_pipeline_input_t {
 
     virtual void record(VkCommandBuffer command_buffer, //
                         VkPipeline pipeline, VkPipelineLayout pipeline_layout) noexcept(false) = 0;
-    virtual VkResult update() noexcept(false) {
+    virtual VkResult update() noexcept {
         return VK_SUCCESS;
     };
 };
 
 auto make_pipeline_input_1(VkDevice device,
                            const VkPhysicalDeviceMemoryProperties& props, //
-                           const fs::path& folder) -> std::unique_ptr<vulkan_pipeline_input_t>;
+                           const fs::path& folder) noexcept(false) -> std::unique_ptr<vulkan_pipeline_input_t>;
 auto make_pipeline_input_2(VkDevice device,
                            const VkPhysicalDeviceMemoryProperties& props, //
-                           const fs::path& folder) -> std::unique_ptr<vulkan_pipeline_input_t>;
+                           const fs::path& folder) noexcept(false) -> std::unique_ptr<vulkan_pipeline_input_t>;
 auto make_pipeline_input_3(VkDevice device,
                            const VkPhysicalDeviceMemoryProperties& props, //
-                           const fs::path& shader_dir) -> std::unique_ptr<vulkan_pipeline_input_t>;
+                           const fs::path& shader_dir) noexcept(false) -> std::unique_ptr<vulkan_pipeline_input_t>;
+
+class vulkan_pipeline_input2_t : public vulkan_pipeline_input_t {
+  public:
+    virtual VkResult update(VkImageView view, VkSampler sampler) noexcept = 0;
+};
+
+auto make_pipeline_input_4(VkDevice device,
+                           const VkPhysicalDeviceMemoryProperties& props, //
+                           const fs::path& shader_dir) noexcept(false) -> std::unique_ptr<vulkan_pipeline_input2_t>;
 
 /**
  * @brief VkPipeline + VkPipelineLayout + RAII
@@ -208,11 +217,6 @@ class vulkan_pipeline_t final {
     ~vulkan_pipeline_t() noexcept;
 
   public:
-    [[deprecated]] static void setup_shader_stage(VkPipelineShaderStageCreateInfo (&stage)[2], //
-                                                  VkShaderModule vert, VkShaderModule frag) noexcept;
-    [[deprecated]] static void setup_vertex_input_state(VkPipelineVertexInputStateCreateInfo& info) noexcept;
-    [[deprecated]] static VkResult make_pipeline_layout(VkDevice device, VkPipelineLayout& layout) noexcept;
-
     static void setup_input_assembly(VkPipelineInputAssemblyStateCreateInfo& info) noexcept;
     /// @note currently using viewport & scissor have equal size
     static void setup_viewport_scissor(const VkExtent2D& extent, VkPipelineViewportStateCreateInfo& info,

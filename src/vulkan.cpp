@@ -190,28 +190,6 @@ vulkan_pipeline_t::~vulkan_pipeline_t() noexcept {
     vkDestroyPipeline(device, handle, nullptr);
 }
 
-void vulkan_pipeline_t::setup_shader_stage(VkPipelineShaderStageCreateInfo (&stage)[2], VkShaderModule vert,
-                                           VkShaderModule frag) noexcept {
-    stage[0].sType = stage[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    stage[0].pName = stage[1].pName = "main";
-    // for vertex shader
-    stage[0].pSpecializationInfo = nullptr;
-    stage[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-    stage[0].module = vert;
-    // for fragment shader
-    stage[1].pSpecializationInfo = nullptr;
-    stage[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    stage[1].module = frag;
-}
-
-void vulkan_pipeline_t::setup_vertex_input_state(VkPipelineVertexInputStateCreateInfo& info) noexcept {
-    info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    if (info.vertexBindingDescriptionCount)
-        info.pVertexBindingDescriptions = nullptr;
-    if (info.vertexAttributeDescriptionCount)
-        info.pVertexAttributeDescriptions = nullptr;
-}
-
 void vulkan_pipeline_t::setup_input_assembly(VkPipelineInputAssemblyStateCreateInfo& info) noexcept {
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -241,7 +219,7 @@ void vulkan_pipeline_t::setup_rasterization_state(VkPipelineRasterizationStateCr
     info.polygonMode = VK_POLYGON_MODE_FILL;
     info.lineWidth = 1.0f;
     info.cullMode = VK_CULL_MODE_BACK_BIT;
-    // info.frontFace = VK_FRONT_FACE_CLOCKWISE; // GL coordinate
+    //info.frontFace = VK_FRONT_FACE_CLOCKWISE; // GL coordinate
     info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // Vulkan coordinate
     info.depthBiasEnable = VK_FALSE;
     info.depthBiasConstantFactor = 0.0f;
@@ -275,16 +253,6 @@ void vulkan_pipeline_t::setup_color_blend_state(VkPipelineColorBlendAttachmentSt
     info.logicOp = VK_LOGIC_OP_COPY;
     info.attachmentCount = 1;
     info.pAttachments = &attachment;
-}
-
-VkResult vulkan_pipeline_t::make_pipeline_layout(VkDevice device, VkPipelineLayout& layout) noexcept {
-    VkPipelineLayoutCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    info.setLayoutCount = 0;
-    info.pSetLayouts = nullptr;
-    info.pushConstantRangeCount = 0;
-    info.pPushConstantRanges = nullptr;
-    return vkCreatePipelineLayout(device, &info, nullptr, &layout);
 }
 
 VkResult check_surface_format(VkPhysicalDevice device, VkSurfaceKHR surface, //
