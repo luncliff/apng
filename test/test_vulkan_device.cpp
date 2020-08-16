@@ -122,44 +122,118 @@ TEST_CASE("VkDevice", "[vulkan]") {
     auto properties = std::make_unique<VkQueueFamilyProperties[]>(count);
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &count, properties.get());
 
-    VkDeviceQueueCreateInfo queues[2]{};
-    float priority = 0.012f;
-    queues[0].sType = queues[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queues[0].pQueuePriorities = queues[1].pQueuePriorities = &priority;
-    queues[0].queueFamilyIndex = queues[1].queueFamilyIndex = UINT32_MAX;
-    queues[0].queueCount = queues[1].queueCount = 1;
-    for (auto i = 0u; i < count; ++i) {
-        const auto& prop = properties[i];
-        if (prop.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-            queues[0].queueFamilyIndex = i;
-            continue;
+    SECTION("1 queue") {
+        VkDeviceQueueCreateInfo qinfo{};
+        float priority = 0.012f;
+        qinfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        qinfo.pQueuePriorities = &priority;
+        qinfo.queueFamilyIndex = UINT32_MAX;
+        qinfo.queueCount = 1;
+        for (auto i = 0u; i < count; ++i) {
+            const auto& prop = properties[i];
+            if (prop.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                qinfo.queueFamilyIndex = i;
+                continue;
+            }
         }
-        if (prop.queueFlags & VK_QUEUE_COMPUTE_BIT) {
-            queues[1].queueFamilyIndex = i;
-            continue;
-        }
+        REQUIRE(qinfo.queueFamilyIndex < count);
+
+        VkDeviceCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        info.pQueueCreateInfos = &qinfo;
+        info.queueCreateInfoCount = 1;
+        VkPhysicalDeviceFeatures features{};
+        info.pEnabledFeatures = &features;
+
+        VkDevice device = VK_NULL_HANDLE;
+        REQUIRE(vkCreateDevice(gpu, &info, nullptr, &device) == VK_SUCCESS);
+        auto on_return = gsl::finally([device]() { //
+            vkDestroyDevice(device, nullptr);
+        });
+        VkQueue handles[1]{};
+        vkGetDeviceQueue(device, qinfo.queueFamilyIndex, 0, handles + 0);
+        REQUIRE(handles[0] != VK_NULL_HANDLE);
     }
-    REQUIRE(queues[0].queueFamilyIndex < count);
+    SECTION("2 queue") {
+        VkDeviceQueueCreateInfo queues[2]{};
+        float priority = 0.012f;
+        queues[0].sType = queues[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queues[0].pQueuePriorities = queues[1].pQueuePriorities = &priority;
+        queues[0].queueFamilyIndex = queues[1].queueFamilyIndex = UINT32_MAX;
+        queues[0].queueCount = queues[1].queueCount = 1;
+        for (auto i = 0u; i < count; ++i) {
+            const auto& prop = properties[i];
+            if (prop.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                queues[0].queueFamilyIndex = i;
+                continue;
+            }
+            if (prop.queueFlags & VK_QUEUE_COMPUTE_BIT) {
+                queues[1].queueFamilyIndex = i;
+                continue;
+            }
+        }
+        REQUIRE(queues[0].queueFamilyIndex < count);
 
-    VkDeviceCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    info.pQueueCreateInfos = queues;
-    info.queueCreateInfoCount = 2;
-    if (queues[1].queueFamilyIndex > count)
-        info.queueCreateInfoCount -= 1;
-    VkPhysicalDeviceFeatures features{};
-    info.pEnabledFeatures = &features;
+        VkDeviceCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        info.pQueueCreateInfos = queues;
+        info.queueCreateInfoCount = 2;
+        VkPhysicalDeviceFeatures features{};
+        info.pEnabledFeatures = &features;
 
-    VkDevice device = VK_NULL_HANDLE;
-    REQUIRE(vkCreateDevice(gpu, &info, nullptr, &device) == VK_SUCCESS);
-    auto on_return = gsl::finally([device]() { //
-        vkDestroyDevice(device, nullptr);
-    });
-    VkQueue handles[2]{};
-    vkGetDeviceQueue(device, queues[0].queueFamilyIndex, 0, handles + 0);
-    REQUIRE(handles[0] != VK_NULL_HANDLE);
-    if (queues[1].queueFamilyIndex < count) {
+        VkDevice device = VK_NULL_HANDLE;
+        REQUIRE(vkCreateDevice(gpu, &info, nullptr, &device) == VK_SUCCESS);
+        auto on_return = gsl::finally([device]() { //
+            vkDestroyDevice(device, nullptr);
+        });
+        VkQueue handles[2]{};
+        vkGetDeviceQueue(device, queues[0].queueFamilyIndex, 0, handles + 0);
+        REQUIRE(handles[0] != VK_NULL_HANDLE);
         vkGetDeviceQueue(device, queues[1].queueFamilyIndex, 0, handles + 1);
         REQUIRE(handles[1] != VK_NULL_HANDLE);
+    }
+    SECTION("3 queue") {
+        VkDeviceQueueCreateInfo queues[3]{};
+        float priority = 0.012f;
+        queues[0].sType = queues[1].sType = queues[2].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queues[0].pQueuePriorities = queues[1].pQueuePriorities = queues[2].pQueuePriorities = &priority;
+        queues[0].queueFamilyIndex = queues[1].queueFamilyIndex = queues[2].queueFamilyIndex = UINT32_MAX;
+        queues[0].queueCount = queues[1].queueCount = queues[2].queueCount = 1;
+        for (auto i = 0u; i < count; ++i) {
+            const auto& prop = properties[i];
+            if (prop.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                queues[0].queueFamilyIndex = i;
+                if (prop.queueFlags & VK_QUEUE_COMPUTE_BIT)
+                    queues[2].queueFamilyIndex = i;
+                continue;
+            }
+            if (prop.queueFlags & VK_QUEUE_TRANSFER_BIT) {
+                queues[1].queueFamilyIndex = i;
+                continue;
+            }
+        }
+        REQUIRE(queues[0].queueFamilyIndex < count);
+        REQUIRE(queues[1].queueFamilyIndex < count);
+        REQUIRE(queues[2].queueFamilyIndex < count);
+
+        VkDeviceCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        info.pQueueCreateInfos = queues;
+        info.queueCreateInfoCount = 2;
+        VkPhysicalDeviceFeatures features{};
+        info.pEnabledFeatures = &features;
+
+        VkDevice device = VK_NULL_HANDLE;
+        REQUIRE(vkCreateDevice(gpu, &info, nullptr, &device) == VK_SUCCESS);
+        auto on_return = gsl::finally([device]() { //
+            vkDestroyDevice(device, nullptr);
+        });
+        VkQueue handles[3]{};
+        vkGetDeviceQueue(device, queues[0].queueFamilyIndex, 0, handles + 0);
+        REQUIRE(handles[0] != VK_NULL_HANDLE);
+        vkGetDeviceQueue(device, queues[1].queueFamilyIndex, 0, handles + 1);
+        REQUIRE(handles[1] != VK_NULL_HANDLE);
+        vkGetDeviceQueue(device, queues[2].queueFamilyIndex, 0, handles + 2);
+        REQUIRE(handles[2] != VK_NULL_HANDLE);
     }
 }

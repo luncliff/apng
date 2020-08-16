@@ -456,7 +456,7 @@ struct input3_t : vulkan_pipeline_input_t {
 
     VkResult update() noexcept(false) override {
         uniform_t ubo{};
-        const float time = clock() / 1900;
+        const float time = static_cast<float>(clock()) / 1900;
         const auto Z = glm::vec3(0, 0, 1);
         ubo.model = glm::rotate(glm::mat4(1), glm::radians(time), Z);
         ubo.view = glm::lookAt(glm::vec3(2, 2, 2), glm::vec3(0), Z);

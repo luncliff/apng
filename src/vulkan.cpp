@@ -384,13 +384,15 @@ VkResult create_device(VkPhysicalDevice physical_device,                     //
         }
         // present queue
         if (queues[1].queueFamilyIndex == UINT32_MAX) {
+            VkBool32 support = false;
             for (auto surface : gsl::make_span(surfaces, surface_count)) {
-                VkBool32 support = false;
                 if (auto ec = vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, surface, &support))
                     return ec;
-                if (support == false)
-                    return VK_ERROR_UNKNOWN;
+                if (support == false) // all surface should be supported
+                    break;
             }
+            if (support == false) // try next
+                continue;
             queues[1].queueFamilyIndex = i;
             queues[1].queueCount = 1;
         }

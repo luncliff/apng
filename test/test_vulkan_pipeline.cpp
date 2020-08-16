@@ -317,10 +317,12 @@ class vulkan_surface_owner_t final {
 void print_debug(spdlog::logger& stream, const VkSurfaceFormatKHR& format) {
     stream.debug("format:");
     switch (auto code = format.format) {
-    case VK_FORMAT_B8G8R8A8_UNORM:           // 44
-    case VK_FORMAT_B8G8R8A8_SRGB:            // 50
+    case VK_FORMAT_B8G8R8A8_SRGB:  // 50
+    case VK_FORMAT_B8G8R8A8_UNORM: // 44
+#if defined(__APPLE__)
     case VK_FORMAT_A2R10G10B10_UNORM_PACK32: // 58
     case VK_FORMAT_R16G16B16A16_SFLOAT:      // 97
+#endif
     default:
         stream.debug(" - code: {}", code);
         break;
@@ -338,13 +340,15 @@ TEST_CASE("render multiple surface", "[vulkan][glfw]") {
     // each surfaces has different format,
     // but they share colorspace and present mode
     vulkan_surface_owner_t surfaces[3]{
-        {"VK_FORMAT_B8G8R8A8_SRGB", instance.handle, physical_device},
-        {"VK_FORMAT_B8G8R8A8_UNORM", instance.handle, physical_device},
-        {"VK_FORMAT_R16G16B16A16_SFLOAT", instance.handle, physical_device},
+        {"window0", instance.handle, physical_device},
+        {"window1", instance.handle, physical_device},
+        {"window2", instance.handle, physical_device},
     };
-    const VkFormat surface_formats[3]{VK_FORMAT_B8G8R8A8_SRGB,  //
-                                      VK_FORMAT_B8G8R8A8_UNORM, //
-                                      VK_FORMAT_R16G16B16A16_SFLOAT};
+    const VkFormat surface_formats[3]{
+        VK_FORMAT_B8G8R8A8_SRGB,  //
+        VK_FORMAT_B8G8R8A8_UNORM, //
+        VK_FORMAT_B8G8R8A8_UNORM, /// @todo use VK_FORMAT_R16G16B16A16_SFLOAT in apple
+    };
     const VkColorSpaceKHR surface_color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     const VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
     REQUIRE(check_support(physical_device, surfaces[0].handle, //
