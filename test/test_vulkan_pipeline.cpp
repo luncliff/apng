@@ -30,14 +30,13 @@ TEST_CASE("RenderPass + Pipeline", "[vulkan]") {
 
     // virtual device & queue
     VkDevice device{};
-    uint32_t graphics_index = 0;
-    REQUIRE(make_device(physical_device, device, //
-                        graphics_index) == VK_SUCCESS);
+    VkDeviceQueueCreateInfo queue_info{};
+    REQUIRE(create_device(physical_device, device, queue_info) == VK_SUCCESS);
     auto on_return_2 = gsl::finally([&device]() { //
         vkDestroyDevice(device, nullptr);
     });
     VkQueue queues[1]{};
-    vkGetDeviceQueue(device, graphics_index, 0, queues + 0);
+    vkGetDeviceQueue(device, queue_info.queueFamilyIndex, 0, queues + 0);
     REQUIRE(queues[0] != VK_NULL_HANDLE);
 
     // input data + shader + recording
@@ -62,11 +61,12 @@ TEST_CASE("Render Offscreen", "[vulkan]") {
 
     // virtual device & queue
     VkDevice device{};
-    uint32_t index = 0;
-    REQUIRE(make_device(physical_device, device, index) == VK_SUCCESS);
+    VkDeviceQueueCreateInfo queue_info{};
+    REQUIRE(create_device(physical_device, device, queue_info) == VK_SUCCESS);
     auto on_return_2 = gsl::finally([&device]() { //
         vkDestroyDevice(device, nullptr);
     });
+    const auto& index = queue_info.queueFamilyIndex;
     VkQueue queues[1]{};
     vkGetDeviceQueue(device, index, 0, queues + 0);
     REQUIRE(queues[0] != VK_NULL_HANDLE);
@@ -188,8 +188,6 @@ TEST_CASE("render single surface", "[vulkan][glfw]") {
     auto instance = make_vulkan_instance_glfw("instance0");
     VkPhysicalDevice physical_device{};
     REQUIRE(get_physical_device(instance.handle, physical_device) == VK_SUCCESS);
-    VkPhysicalDeviceMemoryProperties meminfo{};
-    vkGetPhysicalDeviceMemoryProperties(physical_device, &meminfo);
 
     // surface
     auto window = create_window_glfw("window0");
@@ -218,19 +216,22 @@ TEST_CASE("render single surface", "[vulkan][glfw]") {
 
     // virtual device & queue
     VkDevice device{};
-    uint32_t graphics_index = 0, presentation_index = 0;
-    REQUIRE(make_device(physical_device, surface, device, //
-                        graphics_index, presentation_index) == VK_SUCCESS);
+    VkDeviceQueueCreateInfo qinfo[2]{};
+    REQUIRE(create_device(physical_device, &surface, 1, //
+                          device, qinfo) == VK_SUCCESS);
     auto on_return_2 = gsl::finally([&device]() { //
         vkDestroyDevice(device, nullptr);
     });
     VkQueue queues[2]{};
-    vkGetDeviceQueue(device, graphics_index, 0, queues + 0);
-    vkGetDeviceQueue(device, presentation_index, 0, queues + 1);
+    vkGetDeviceQueue(device, qinfo[0].queueFamilyIndex, 0, queues + 0);
+    vkGetDeviceQueue(device, qinfo[1].queueFamilyIndex, 0, queues + 1);
     REQUIRE(queues[0] != VK_NULL_HANDLE);
     REQUIRE(queues[1] != VK_NULL_HANDLE);
+    const auto& graphics_index = qinfo[0].queueFamilyIndex;
 
     // input data + shader
+    VkPhysicalDeviceMemoryProperties meminfo{};
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &meminfo);
     auto input = make_pipeline_input_2(device, meminfo, get_asset_dir());
 
     // graphics pipeline + presentation

@@ -71,22 +71,16 @@ VkResult get_physical_device(VkInstance instance, VkPhysicalDevice& physical_dev
 
 uint32_t get_graphics_queue_available(VkQueueFamilyProperties* properties, uint32_t count) noexcept;
 
-/**
- * @brief Create a new `VkDevice` with GFX queue
- */
-VkResult make_device(VkPhysicalDevice physical_device, //
-                     VkDevice& handle,                 //
-                     uint32_t& queue_index, float priority = 0.012f) noexcept;
-
 uint32_t get_surface_support(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t count,
                              uint32_t exclude_index) noexcept;
 
 /**
- * @brief Create a new `VkDevice` with GFX, Present queue
+ * @brief create 1 device with 1 queue(GFX) information
+ * 
+ * @return VkResult `VK_SUCCESS` if everything was successful
  */
-VkResult make_device(VkPhysicalDevice physical_device, VkSurfaceKHR surface, //
-                     VkDevice& handle,                                       //
-                     uint32_t& graphics_index, uint32_t& present_index, float priority = 0.012f) noexcept;
+VkResult create_device(VkPhysicalDevice physical_device, //
+                       VkDevice& device, VkDeviceQueueCreateInfo& queue) noexcept;
 
 VkResult check_surface_format(VkPhysicalDevice device, VkSurfaceKHR surface, VkFormat surface_format,
                               VkColorSpaceKHR surface_color_space, bool& suitable) noexcept;
@@ -94,7 +88,7 @@ VkResult check_present_mode(VkPhysicalDevice device, VkSurfaceKHR surface, const
                             bool& suitable) noexcept;
 
 /**
- * @brief create 1 device with 2 queue information
+ * @brief create 1 device with 2 queue(GFX, Present) information
  * 
  * @param queues queue information. 0 is for graphics, 1 is for presentation
  * @return VkResult `VK_SUCCESS` if everything was successful

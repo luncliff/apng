@@ -63,18 +63,20 @@ uint32_t get_graphics_queue_available(VkQueueFamilyProperties* properties, uint3
     return static_cast<uint32_t>(-1);
 }
 
-VkResult make_device(VkPhysicalDevice physical_device, VkDevice& handle, uint32_t& queue_index,
-                     float priority) noexcept {
+const float global_queue_priority = 0;
+
+VkResult create_device(VkPhysicalDevice physical_device, //
+                       VkDevice& device, VkDeviceQueueCreateInfo& queue_info) noexcept {
     uint32_t count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, nullptr);
-    if (count == 0)
-        return VK_ERROR_UNKNOWN;
     auto properties = make_unique<VkQueueFamilyProperties[]>(count);
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, properties.get());
-    VkDeviceQueueCreateInfo queue_info{};
+
     queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queue_info.pQueuePriorities = &priority;
-    queue_index = queue_info.queueFamilyIndex = get_graphics_queue_available(properties.get(), count);
+    queue_info.pQueuePriorities = &global_queue_priority;
+    queue_info.queueFamilyIndex = get_graphics_queue_available(properties.get(), count);
+    if (queue_info.queueFamilyIndex > count)
+        return VK_ERROR_UNKNOWN;
     queue_info.queueCount = 1;
     // create a device
     VkDeviceCreateInfo info{};
@@ -85,7 +87,7 @@ VkResult make_device(VkPhysicalDevice physical_device, VkDevice& handle, uint32_
     info.pEnabledFeatures = &features;
     info.queueCreateInfoCount = 1;
     info.pQueueCreateInfos = &queue_info;
-    return vkCreateDevice(physical_device, &info, nullptr, &handle);
+    return vkCreateDevice(physical_device, &info, nullptr, &device);
 }
 
 uint32_t get_surface_support(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t count,
@@ -99,51 +101,6 @@ uint32_t get_surface_support(VkPhysicalDevice device, VkSurfaceKHR surface, uint
             return i;
     }
     return static_cast<uint32_t>(-1);
-}
-
-VkResult make_device(VkPhysicalDevice gpu, VkSurfaceKHR surface,
-                     VkDevice& handle, //
-                     uint32_t& graphics_index, uint32_t& present_index, float priority) noexcept {
-    uint32_t count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &count, nullptr);
-    auto properties = make_unique<VkQueueFamilyProperties[]>(count);
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &count, properties.get());
-    VkDeviceQueueCreateInfo queues[2]{};
-    {
-        auto& gfx = queues[0];
-        gfx.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        gfx.pQueuePriorities = &priority;
-        gfx.queueCount = 1;
-        gfx.queueFamilyIndex = get_graphics_queue_available(properties.get(), count);
-        if (gfx.queueFamilyIndex > count)
-            return VK_ERROR_UNKNOWN;
-        graphics_index = gfx.queueFamilyIndex;
-    }
-    {
-        auto& present = queues[1];
-        present.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        present.pQueuePriorities = &priority;
-        present.queueCount = 1;
-        present.queueFamilyIndex = get_surface_support(gpu, surface, count,
-                                                       // index of graphics/presentation queue must be different
-                                                       queues[0].queueFamilyIndex);
-        if (present.queueFamilyIndex > count)
-            return VK_ERROR_UNKNOWN;
-        present_index = present.queueFamilyIndex;
-    }
-    // create a device
-    VkDeviceCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    info.enabledLayerCount = 0;
-    // Physical Device should have extension VK_KHR_SWAPCHAIN_EXTENSION_NAME
-    const char* extension_names[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
-    info.ppEnabledExtensionNames = extension_names;
-    info.enabledExtensionCount = 1;
-    info.pQueueCreateInfos = queues;
-    info.queueCreateInfoCount = 2;
-    VkPhysicalDeviceFeatures features{};
-    info.pEnabledFeatures = &features;
-    return vkCreateDevice(gpu, &info, nullptr, &handle);
 }
 
 vulkan_renderpass_t::vulkan_renderpass_t(VkDevice _device, VkFormat surface_format) noexcept(false) : device{_device} {
@@ -413,8 +370,7 @@ VkResult create_device(VkPhysicalDevice physical_device,                     //
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, properties.get());
     // 2 queue (gfx, present)
     queues[0].sType = queues[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    float priority = 0;
-    queues[0].pQueuePriorities = queues[1].pQueuePriorities = &priority;
+    queues[0].pQueuePriorities = queues[1].pQueuePriorities = &global_queue_priority;
     queues[0].queueFamilyIndex = queues[1].queueFamilyIndex = UINT32_MAX;
     for (auto i = 0u; i < count; ++i) {
         // graphics queue
@@ -559,19 +515,22 @@ vulkan_command_pool_t::vulkan_command_pool_t(VkDevice _device, uint32_t queue_in
         if (auto ec = vkCreateCommandPool(device, &info, nullptr, &handle))
             throw vulkan_exception_t{ec, "vkCreateCommandPool"};
     }
-    buffers = make_unique<VkCommandBuffer[]>(count);
-    VkCommandBufferAllocateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    info.commandPool = handle;
-    info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; // == 0
-    info.commandBufferCount = count;
-    if (auto ec = vkAllocateCommandBuffers(device, &info, buffers.get())) {
-        vkDestroyCommandPool(device, handle, nullptr);
-        throw vulkan_exception_t{ec, "vkAllocateCommandBuffers"};
+    {
+        buffers = make_unique<VkCommandBuffer[]>(count);
+        VkCommandBufferAllocateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        info.commandPool = handle;
+        info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; // == 0
+        info.commandBufferCount = count;
+        if (auto ec = vkAllocateCommandBuffers(device, &info, buffers.get())) {
+            vkDestroyCommandPool(device, handle, nullptr);
+            throw vulkan_exception_t{ec, "vkAllocateCommandBuffers"};
+        }
     }
 }
 
 vulkan_command_pool_t::~vulkan_command_pool_t() noexcept {
+    vkFreeCommandBuffers(device, handle, count, buffers.get());
     vkDestroyCommandPool(device, handle, nullptr);
 }
 

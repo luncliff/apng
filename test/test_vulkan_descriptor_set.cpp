@@ -162,10 +162,10 @@ VkResult read_image_data(VkDevice device, const VkPhysicalDeviceMemoryProperties
 
     VkMemoryRequirements requirements{};
     vkGetBufferMemoryRequirements(device, buffer, &requirements);
-    stream->info("VkBuffer:");
-    stream->info(" - usage: {:b}", info.usage);
-    stream->info(" - size: {}", requirements.size);
-    stream->info(" - alignment: {}", requirements.alignment);
+    stream->info(" - VkBuffer:");
+    stream->info("   - usage: {:b}", info.usage);
+    stream->info("   - size: {}", requirements.size);
+    stream->info("   - alignment: {}", requirements.alignment);
     {
         const auto desired = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
         VkMemoryAllocateInfo info{};
@@ -183,9 +183,9 @@ VkResult read_image_data(VkDevice device, const VkPhysicalDeviceMemoryProperties
         }
         if (auto ec = vkAllocateMemory(device, &info, nullptr, &memory))
             throw vulkan_exception_t{ec, "vkAllocateMemory"};
-        stream->info("VkDeviceMemory:");
-        stream->info(" - required: {}", requirements.size);
-        stream->info(" - type_index: {}", info.memoryTypeIndex);
+        stream->info(" - VkDeviceMemory:");
+        stream->info("   - required: {}", requirements.size);
+        stream->info("   - type_index: {}", info.memoryTypeIndex);
     }
     if (auto ec = vkBindBufferMemory(device, buffer, memory, 0))
         return ec;
@@ -217,13 +217,13 @@ VkResult make_image(VkDevice device, const VkPhysicalDeviceMemoryProperties& mem
         return ec;
     VkMemoryRequirements requirements{};
     vkGetImageMemoryRequirements(device, image, &requirements);
-    stream->info("VkImage:");
-    stream->info(" - type: {}", "VK_IMAGE_TYPE_2D");
-    stream->info(" - format: {}", info.format);
-    stream->info(" - mipmap: {}", info.mipLevels);
-    stream->info(" - usage: {:b}", info.usage);
-    stream->info(" - size: {}", requirements.size);
-    stream->info(" - alignment: {}", requirements.alignment);
+    stream->info(" - VkImage:");
+    stream->info("   - type: {}", "VK_IMAGE_TYPE_2D");
+    stream->info("   - format: {}", info.format);
+    stream->info("   - mipmap: {}", info.mipLevels);
+    stream->info("   - usage: {:b}", info.usage);
+    stream->info("   - size: {}", requirements.size);
+    stream->info("   - alignment: {}", requirements.alignment);
     {
         VkMemoryAllocateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -241,15 +241,16 @@ VkResult make_image(VkDevice device, const VkPhysicalDeviceMemoryProperties& mem
         }
         if (auto ec = vkAllocateMemory(device, &info, nullptr, &memory))
             return ec;
-        stream->info("VkDeviceMemory:");
-        stream->info(" - required: {}", requirements.size);
-        stream->info(" - type_index: {}", info.memoryTypeIndex);
+        stream->info(" - VkDeviceMemory:");
+        stream->info("   - required: {}", requirements.size);
+        stream->info("   - type_index: {}", info.memoryTypeIndex);
     }
     return vkBindImageMemory(device, image, memory, 0);
 }
 
 TEST_CASE("create VkImage from image file", "[image]") {
     auto stream = get_current_stream();
+    stream->info("VkImage from file:");
 
     const char* layers[1]{"VK_LAYER_KHRONOS_validation"};
     vulkan_instance_t instance{"app1", gsl::make_span(layers, 1), {}};
@@ -260,12 +261,14 @@ TEST_CASE("create VkImage from image file", "[image]") {
     vkGetPhysicalDeviceMemoryProperties(physical_device, &meminfo);
 
     VkDevice device{};
-    uint32_t qfi = UINT32_MAX;
-    REQUIRE(make_device(physical_device, device, qfi) == VK_SUCCESS);
-    REQUIRE(qfi != UINT32_MAX);
+    VkDeviceQueueCreateInfo qinfo{};
+    REQUIRE(create_device(physical_device, device, qinfo) == VK_SUCCESS);
+    REQUIRE(qinfo.queueFamilyIndex != UINT32_MAX);
     auto on_return_0 = gsl::finally([device]() {
         vkDestroyDevice(device, nullptr); //
     });
+    VkQueue queue = VK_NULL_HANDLE;
+    vkGetDeviceQueue(device, qinfo.queueFamilyIndex, 0, &queue);
 
     VkBuffer buffers[1]{};
     VkImage images[1]{};
@@ -279,7 +282,8 @@ TEST_CASE("create VkImage from image file", "[image]") {
             vkFreeMemory(device, memories[i], nullptr);
     });
     const auto fpath = get_asset_dir() / "image_1080_608.png";
-    stream->info("file: {}", fpath.generic_u8string());
+    stream->info(" - file: {}", fpath.generic_u8string());
+    VkFormat image_format = VK_FORMAT_R8G8B8A8_UNORM; // VK_FORMAT_R8G8B8A8_SRGB;
     VkExtent2D image_extent{};
     int component{};
     REQUIRE_NOTHROW(read_image_data(device, meminfo, image_extent, component, //
@@ -289,6 +293,221 @@ TEST_CASE("create VkImage from image file", "[image]") {
     REQUIRE(component == 4);
     REQUIRE(image_extent.width == 1080);
     REQUIRE(image_extent.height == 608);
-    REQUIRE(make_image(device, meminfo, image_extent, VK_FORMAT_R8G8B8A8_UNORM, //
+    REQUIRE(make_image(device, meminfo, image_extent, image_format, //
                        images[0], memories[1]) == VK_SUCCESS);
+
+    SECTION("transfer multiple VkCommandBuffer 1 by 1") {
+        vulkan_command_pool_t command_pool{device, qinfo.queueFamilyIndex, 3};
+        // when using multiple command buffer and they are submitted at once,
+        // theire execution may in out of order. submit 1 by 1
+        VkSubmitInfo submit{};
+        submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        {
+            // image layout transition before copy ( UNDEFINED -> TRANSFER_DST_OPTIMAL )
+            auto command_buffer = command_pool.buffers[0];
+            submit.commandBufferCount = 1;
+            submit.pCommandBuffers = &command_buffer;
+            VkCommandBufferBeginInfo begin{};
+            begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            REQUIRE(vkBeginCommandBuffer(command_buffer, &begin) == VK_SUCCESS);
+            {
+                VkImageMemoryBarrier barrier{};
+                barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED; // image's current layout
+                barrier.srcAccessMask = 0;
+                barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; // destination
+                barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;     //  of copy(write access)
+                barrier.image = images[0];
+                barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                barrier.subresourceRange.baseMipLevel = 0, barrier.subresourceRange.levelCount = 1;
+                barrier.subresourceRange.baseArrayLayer = 0, barrier.subresourceRange.layerCount = 1;
+                vkCmdPipelineBarrier(command_buffer, //
+                                     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                                     //
+                                     0, nullptr, // memory
+                                     0, nullptr, // buffer
+                                     1, &barrier // image
+                );
+            }
+            REQUIRE(vkEndCommandBuffer(command_buffer) == VK_SUCCESS);
+            REQUIRE(vkQueueSubmit(queue, 1, &submit, VK_NULL_HANDLE) == VK_SUCCESS);
+        }
+        {
+            // copy buffer to image: ( BUFFER_TRANSFER_SRC -> IMAGE_LAYOUT_TRANSFER_DST )
+            auto command_buffer = command_pool.buffers[1];
+            submit.commandBufferCount = 1;
+            submit.pCommandBuffers = &command_buffer;
+            VkCommandBufferBeginInfo begin{};
+            begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            REQUIRE(vkBeginCommandBuffer(command_buffer, &begin) == VK_SUCCESS);
+            {
+                VkBufferImageCopy regions[1]{};
+                regions[0].bufferOffset = 0; // from VkBuffer
+                regions[0].bufferRowLength = 0;
+                regions[0].bufferImageHeight = 0;
+                regions[0].imageOffset = {0, 0, 0}; // to VkImage
+                regions[0].imageExtent = {image_extent.width, image_extent.height, 1};
+                regions[0].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                regions[0].imageSubresource.mipLevel = 0;
+                regions[0].imageSubresource.baseArrayLayer = 0;
+                regions[0].imageSubresource.layerCount = 1;
+                vkCmdCopyBufferToImage(command_buffer, //
+                                       buffers[0], images[0],
+                                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, // see above layout
+                                       1, regions);
+            }
+            REQUIRE(vkEndCommandBuffer(command_buffer) == VK_SUCCESS);
+            REQUIRE(vkQueueSubmit(queue, 1, &submit, VK_NULL_HANDLE) == VK_SUCCESS);
+        }
+        {
+            // image layout transition after copy ( TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL )
+            auto command_buffer = command_pool.buffers[2];
+            submit.commandBufferCount = 1;
+            submit.pCommandBuffers = &command_buffer;
+            VkCommandBufferBeginInfo begin{};
+            begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            REQUIRE(vkBeginCommandBuffer(command_buffer, &begin) == VK_SUCCESS);
+            {
+                VkImageMemoryBarrier barrier{};
+                barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; // was copy destination
+                barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // shader can read
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                barrier.image = images[0];
+                barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                barrier.subresourceRange.baseMipLevel = 0, barrier.subresourceRange.levelCount = 1;
+                barrier.subresourceRange.baseArrayLayer = 0, barrier.subresourceRange.layerCount = 1;
+                vkCmdPipelineBarrier(command_buffer, //
+                                     VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                                     //
+                                     0, nullptr, // memory
+                                     0, nullptr, // buffer
+                                     1, &barrier // image
+                );
+            }
+            REQUIRE(vkEndCommandBuffer(command_buffer) == VK_SUCCESS);
+            REQUIRE(vkQueueSubmit(queue, 1, &submit, VK_NULL_HANDLE) == VK_SUCCESS);
+        }
+        REQUIRE(vkQueueWaitIdle(queue) == VK_SUCCESS);
+    }
+    SECTION("transfer in 1 VkCommandBuffer") {
+        // combine to 1 command buffer in order and submit once
+        vulkan_command_pool_t command_pool{device, qinfo.queueFamilyIndex, 3};
+        VkSubmitInfo submit{};
+        submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        auto command_buffer = command_pool.buffers[0];
+        submit.commandBufferCount = 1;
+        submit.pCommandBuffers = &command_buffer;
+        VkCommandBufferBeginInfo begin{};
+        begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        REQUIRE(vkBeginCommandBuffer(command_buffer, &begin) == VK_SUCCESS);
+        {
+            // image layout transition before copy ( UNDEFINED -> TRANSFER_DST_OPTIMAL )
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED; // image's current layout
+            barrier.srcAccessMask = 0;
+            barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; // destination
+            barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;     //  of copy(write access)
+            barrier.image = images[0];
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseMipLevel = 0, barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = 0, barrier.subresourceRange.layerCount = 1;
+            vkCmdPipelineBarrier(command_buffer, //
+                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                                 //
+                                 0, nullptr, // memory
+                                 0, nullptr, // buffer
+                                 1, &barrier // image
+            );
+        }
+        {
+            // copy buffer to image: ( BUFFER_TRANSFER_SRC -> IMAGE_LAYOUT_TRANSFER_DST )
+            VkBufferImageCopy regions[1]{};
+            regions[0].bufferOffset = 0; // from VkBuffer
+            regions[0].bufferRowLength = 0;
+            regions[0].bufferImageHeight = 0;
+            regions[0].imageOffset = {0, 0, 0}; // to VkImage
+            regions[0].imageExtent = {image_extent.width, image_extent.height, 1};
+            regions[0].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            regions[0].imageSubresource.mipLevel = 0;
+            regions[0].imageSubresource.baseArrayLayer = 0;
+            regions[0].imageSubresource.layerCount = 1;
+            vkCmdCopyBufferToImage(command_buffer, //
+                                   buffers[0], images[0],
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, // see above layout
+                                   1, regions);
+        }
+        {
+            // image layout transition after copy ( TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL )
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; // was copy destination
+            barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // shader can read
+            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            barrier.image = images[0];
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseMipLevel = 0, barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = 0, barrier.subresourceRange.layerCount = 1;
+            vkCmdPipelineBarrier(command_buffer, //
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                                 //
+                                 0, nullptr, // memory
+                                 0, nullptr, // buffer
+                                 1, &barrier // image
+            );
+        }
+        REQUIRE(vkEndCommandBuffer(command_buffer) == VK_SUCCESS);
+        REQUIRE(vkQueueSubmit(queue, 1, &submit, VK_NULL_HANDLE) == VK_SUCCESS);
+        REQUIRE(vkQueueWaitIdle(queue) == VK_SUCCESS);
+    }
+
+    // create an image view and sampler
+    VkImageView image_view = VK_NULL_HANDLE;
+    {
+        VkImageViewCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        info.image = images[0];
+        info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        info.format = image_format;
+        info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        info.subresourceRange.baseMipLevel = 0;
+        info.subresourceRange.levelCount = 1;
+        info.subresourceRange.baseArrayLayer = 0;
+        info.subresourceRange.layerCount = 1;
+        REQUIRE(vkCreateImageView(device, &info, nullptr, &image_view) == VK_SUCCESS);
+    }
+    auto on_return_2 = gsl::finally([device, image_view]() { vkDestroyImageView(device, image_view, nullptr); });
+
+    VkSampler sampler = VK_NULL_HANDLE;
+    {
+        VkSamplerCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        info.magFilter = VK_FILTER_LINEAR;
+        info.minFilter = VK_FILTER_LINEAR;
+        info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        info.anisotropyEnable = VK_FALSE;
+        info.maxAnisotropy = 1;
+        info.borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
+        // info.unnormalizedCoordinates = VK_TRUE;  // [0, width)
+        info.unnormalizedCoordinates = VK_FALSE; // [0, 1)
+        info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        info.mipLodBias = 0;
+        info.minLod = info.maxLod = 0;
+        REQUIRE(vkCreateSampler(device, &info, nullptr, &sampler) == VK_SUCCESS);
+    }
+    auto on_return_3 = gsl::finally([device, sampler]() { vkDestroySampler(device, sampler, nullptr); });
+    // ...
 }
