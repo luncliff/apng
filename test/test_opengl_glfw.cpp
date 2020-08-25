@@ -13,8 +13,7 @@ namespace fs = std::filesystem;
 auto create(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)>;
 
 auto start_opengl_test() -> gsl::final_action<void (*)()>;
-auto create_opengl_window(gsl::czstring<> window_name) noexcept
-    -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>;
+auto create_opengl_window(gsl::czstring<> window_name) noexcept -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>;
 
 TEST_CASE("GLFW Window", "[opengl][glfw]") {
     auto on_return = start_opengl_test();
@@ -27,8 +26,7 @@ TEST_CASE("GLFW Window", "[opengl][glfw]") {
     glfwMakeContextCurrent(window.get());
 
     SECTION("GL_SHADING_LANGUAGE_VERSION") {
-        auto txt = reinterpret_cast<const char*>(
-            glGetString(GL_SHADING_LANGUAGE_VERSION));
+        auto txt = reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION));
         REQUIRE(txt);
     }
     SECTION("has context") {
@@ -63,8 +61,7 @@ TEST_CASE("window - texture2d_renderer_t", "[opengl][glfw]") {
 
     GLint w = -1, h = -1;
     glfwGetFramebufferSize(window.get(), &w, &h);
-    tex.update(static_cast<uint16_t>(w / 2), static_cast<uint16_t>(h / 2),
-               nullptr);
+    tex.update(static_cast<uint16_t>(w / 2), static_cast<uint16_t>(h / 2), nullptr);
     glViewport(0, 0, w, h);
     auto const context = glfwGetCurrentContext();
     auto repeat = 60;
@@ -101,13 +98,11 @@ TEST_CASE("offscreen - texture2d_renderer_t", "[opengl][glfw]") {
     opengl_framebuffer_t fb{static_cast<uint16_t>(w), static_cast<uint16_t>(h)};
     REQUIRE(fb.bind() == GL_NO_ERROR);
     REQUIRE(glIsFramebuffer(fb.name));
-    REQUIRE(glCheckFramebufferStatus(GL_FRAMEBUFFER) ==
-            GL_FRAMEBUFFER_COMPLETE);
+    REQUIRE(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 
     texture2d_renderer_t renderer{};
     opengl_texture_t tex{};
-    REQUIRE(tex.update(static_cast<uint16_t>(w), static_cast<uint16_t>(h),
-                       nullptr) == GL_NO_ERROR);
+    REQUIRE(tex.update(static_cast<uint16_t>(w), static_cast<uint16_t>(h), nullptr) == GL_NO_ERROR);
 
     glViewport(0, 0, w, h);
     glClearColor(1, 1, 1, 0);
@@ -130,8 +125,7 @@ auto start_opengl_test() -> gsl::final_action<void (*)()> {
 /**
  * @see https://www.glfw.org/docs/latest/window_guide.html#GLFW_CONTEXT_CREATION_API_hint
  */
-auto create_opengl_window(gsl::czstring<> window_name) noexcept
-    -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)> {
+auto create_opengl_window(gsl::czstring<> window_name) noexcept -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)> {
 #if defined(__APPLE__)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API); // OpenGL
     glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
@@ -153,7 +147,6 @@ auto create_opengl_window(gsl::czstring<> window_name) noexcept
 #endif // defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
 #endif // __APPLE__ || _WIN32
     const auto axis = 160 * 5;
-    return std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>{
-        glfwCreateWindow(axis, axis, window_name, NULL, NULL),
-        &glfwDestroyWindow};
+    return std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>{glfwCreateWindow(axis, axis, window_name, NULL, NULL),
+                                                              &glfwDestroyWindow};
 }

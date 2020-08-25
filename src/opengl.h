@@ -3,24 +3,35 @@
 #include <string_view>
 #include <system_error>
 
-#if defined(__APPLE__)
-#define __gl_h_ // suppress <OpenGL/gl.h>
-#define GL_DO_NOT_WARN_IF_MULTI_GL_VERSION_HEADERS_INCLUDED
-#include <OpenGL/OpenGL.h> // _OPENGL_H
-#include <OpenGL/gl3.h>    // __gl3_h_
-#include <OpenGL/gl3ext.h> // __gl3ext_h_
-
-#else
-#include <GLES2/gl2.h>
-#include <GLES2/gl2ext.h>
-#include <GLES2/gl2ext_angle.h>
+#if __has_include(<angle_gl.h>)
+#include <angle_gl.h>
 #endif
+#if __has_include(<EGL/egl.h>)
+#define EGL_EGLEXT_PROTOTYPES
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#include <EGL/eglplatform.h>
 
 /**
- * @brief Generate a context which doesn't require surface for rendering
+ * @brief EGL Context and other informations + RAII
  */
-auto make_offscreen_context(uint32_t& ec, std::string& message) noexcept
-    -> std::shared_ptr<void>;
+struct egl_helper_t {
+    EGLNativeWindowType native_window{};
+    EGLNativeDisplayType native_display = EGL_DEFAULT_DISPLAY;
+    EGLDisplay display = EGL_NO_DISPLAY;
+    EGLint major = 0, minor = 0;
+    EGLint count = 0;
+    EGLConfig configs[10]{};
+    EGLContext context = EGL_NO_CONTEXT;
+    EGLSurface surface = EGL_NO_SURFACE;
+
+  public:
+    explicit egl_helper_t(EGLNativeDisplayType native = EGL_DEFAULT_DISPLAY) noexcept(false);
+    egl_helper_t(EGLNativeWindowType native, bool is_console) noexcept(false);
+    ~egl_helper_t() noexcept;
+};
+
+#endif // <EGL/egl.h>
 
 /**
  * @brief `std::error_category` for `std::system_error` in this module
@@ -60,12 +71,10 @@ struct opengl_shader_program_t final {
                                         std::string_view code) noexcept(false);
     static bool                           //
     get_shader_info(std::string& message, //
-                    GLuint shader,
-                    GLenum status_name = GL_COMPILE_STATUS) noexcept;
+                    GLuint shader, GLenum status_name = GL_COMPILE_STATUS) noexcept;
     static bool                            //
     get_program_info(std::string& message, //
-                     GLuint program,
-                     GLenum status_name = GL_LINK_STATUS) noexcept;
+                     GLuint program, GLenum status_name = GL_LINK_STATUS) noexcept;
 };
 
 /**

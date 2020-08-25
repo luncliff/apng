@@ -13,6 +13,9 @@ add_library(graphics SHARED
     src/vulkan.cpp
     src/vulkan_1.h
     src/vulkan_1.cpp
+    src/opengl.h
+    src/opengl.cpp
+    src/opengl_es.cpp
 )
 
 set_target_properties(graphics
@@ -32,13 +35,14 @@ PRIVATE
 )
 
 find_package(Threads    REQUIRED)
+find_package(unofficial-angle CONFIG REQUIRED) # vcpkg
 find_package(Vulkan     REQUIRED)
 find_package(spdlog     CONFIG REQUIRED)
 find_package(glm        CONFIG REQUIRED)
 target_link_libraries(graphics
 PUBLIC
     Threads::Threads 
-    Vulkan::Vulkan glm
+    glm Vulkan::Vulkan unofficial::angle::libEGL unofficial::angle::libANGLE unofficial::angle::libGLESv2 unofficial::angle::angle_common
     spdlog::spdlog
 )
 
@@ -125,10 +129,12 @@ find_package(Catch2 CONFIG REQUIRED)
 
 add_executable(graphics_test_suite
     test/test_main.cpp
-    test/test_vulkan_device.cpp
-    test/test_vulkan_surface_glfw.cpp
-    test/test_vulkan_pipeline.cpp
-    test/test_vulkan_descriptor_set.cpp
+    # test/test_vulkan_device.cpp
+    # test/test_vulkan_surface_glfw.cpp
+    # test/test_vulkan_pipeline.cpp
+    # test/test_vulkan_descriptor_set.cpp
+    test/test_opengl_es_windows.cpp
+    test/test_opengl_es_glfw.cpp
 )
 add_dependencies(graphics_test_suite
     compile_shaders_glsl
@@ -145,7 +151,7 @@ PRIVATE
 )
 
 target_link_libraries(graphics_test_suite
-PRIVATE
+PUBLIC
     graphics glfw Catch2::Catch2
 )
 

@@ -1,38 +1,17 @@
-
 #include <catch2/catch.hpp>
 
 #include <gsl/gsl>
 #include <type_traits>
 
-#if defined(_WIN32)
+#include "opengl.h"
 #define GLFW_INCLUDE_ES3
-#endif
 #define GLFW_INCLUDE_GLEXT
 #include <GLFW/glfw3.h>
-
-#include "opengl_es.h"
-#include "programs.h"
 
 using namespace std;
 
 auto start_opengl_test() -> gsl::final_action<void (*)()>;
-auto create_opengl_window(gsl::czstring<> window_name) noexcept
-    -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>;
-
-class gfx_program_t {
-  public:
-    virtual ~gfx_program_t() noexcept = default;
-
-  public:
-    virtual void setup(EGLContext context) noexcept(false) = 0;
-    virtual void teardown(EGLContext context) noexcept(false) = 0;
-
-    virtual void update(EGLContext context, //
-                        uint16_t width, uint16_t height) noexcept(false) = 0;
-    virtual GLenum draw(EGLContext context) = 0;
-};
-
-auto create_tex2d_program() -> unique_ptr<gfx_program_t>;
+auto create_opengl_window(gsl::czstring<> window_name) noexcept -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>;
 
 TEST_CASE("GLFW + OpenGL ES", "[opengl][glfw]") {
     auto on_return = start_opengl_test();
@@ -49,6 +28,7 @@ TEST_CASE("GLFW + OpenGL ES", "[opengl][glfw]") {
     SECTION("swap buffer / poll event") {
         auto repeat = 10;
         while (glfwWindowShouldClose(window.get()) == false && repeat--) {
+            glfwPollEvents();
             glClear(GL_COLOR_BUFFER_BIT);
             // ...
             glfwSwapBuffers(window.get());
@@ -57,78 +37,37 @@ TEST_CASE("GLFW + OpenGL ES", "[opengl][glfw]") {
     }
 }
 
-void run_program(GLFWwindow* window, EGLContext context, //
-                 gfx_program_t& gfx, uint16_t repeat = 60) noexcept(false) {
-    gfx.setup(context);
-    auto on_return = gsl::finally([&gfx, context]() {
-        gfx.teardown(context); // cleanup
-    });
-    while (glfwWindowShouldClose(window) == false && repeat--) {
-        // update
-        GLint w = -1, h = -1;
-        glfwGetFramebufferSize(window, &w, &h);
-        gfx.update(context, (uint16_t)w, (uint16_t)h);
-        // clear / draw call
-        const auto color = static_cast<float>(repeat) / 255;
-        glClearColor(color, color, color, 1);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        if (auto ec = gfx.draw(context))
-            FAIL(get_opengl_category().message(ec));
-        // present
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-    }
+auto start_opengl_test() -> gsl::final_action<void (*)()> {
+    REQUIRE(glfwInit());
+    return gsl::finally(&glfwTerminate);
 }
 
-TEST_CASE("tex2d_renderer_t", "[opengl][glfw]") {
-    auto on_return = start_opengl_test();
-    auto window = create_opengl_window("OpenGL ES");
-    if (window == nullptr) {
-        const char* message = nullptr;
-        glfwGetError(&message);
-        FAIL(message);
-    }
-    glfwMakeContextCurrent(window.get());
-    const auto context = eglGetCurrentContext();
-    REQUIRE(context != EGL_NO_CONTEXT);
-    unique_ptr<gfx_program_t> program = nullptr;
-
-    SECTION("GL_TEXTURE_2D") {
-        class impl_t final : public gfx_program_t {
-            unique_ptr<texture2d_renderer_t> renderer{};
-            unique_ptr<opengl_texture_t> tex{};
-
-          public:
-            ~impl_t() noexcept = default;
-
-          public:
-            void setup(EGLContext) noexcept(false) override {
-                renderer = make_unique<texture2d_renderer_t>();
-            }
-            void teardown(EGLContext) noexcept(false) override {
-                auto _renderer = move(renderer);
-                auto _tex = move(tex);
-            }
-            void update(EGLContext, //
-                        uint16_t w, uint16_t h) noexcept(false) override {
-                glViewport(0, 0, w, h);
-                if (tex == nullptr)
-                    tex = make_unique<opengl_texture_t>();
-                if (int ec = tex->update(w, h, nullptr))
-                    throw system_error{ec, get_opengl_category(),
-                                       "glTexImage2D"};
-            }
-
-            GLenum draw(EGLContext context) override {
-                GLint viewport[4]{};
-                glGetIntegerv(GL_VIEWPORT, viewport);
-                if (auto ec = glGetError())
-                    return ec;
-                return renderer->render(context, tex->name, tex->target);
-            }
-        };
-        program = make_unique<impl_t>();
-    }
-    REQUIRE(program != nullptr);
-    return run_program(window.get(), context, *program);
+/**
+ * @see https://www.glfw.org/docs/latest/window_guide.html#GLFW_CONTEXT_CREATION_API_hint
+ */
+auto create_opengl_window(gsl::czstring<> window_name) noexcept -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)> {
+#if defined(__APPLE__)
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API); // OpenGL
+    glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // 3.2 Core
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+#elif defined(_WIN32)
+#if defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API); // OpenGL ES
+    glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
+#if defined(GLFW_INCLUDE_ES2)
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2); // ES 2.0
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+#elif defined(GLFW_INCLUDE_ES3)
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // ES 3.1
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+#endif
+#endif // defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
+#endif // __APPLE__ || _WIN32
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    const auto axis = 160 * 5;
+    return std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>{glfwCreateWindow(axis, axis, window_name, NULL, NULL),
+                                                              &glfwDestroyWindow};
 }

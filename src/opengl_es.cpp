@@ -1,13 +1,15 @@
-#include "opengl_es.h"
-
+#include "opengl.h"
+#if __has_include(<EGL/eglext_angle.h>)
+#include <EGL/eglext_angle.h>
+#endif
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 using namespace std;
 
-egl_bundle_t::egl_bundle_t(EGLNativeDisplayType native) noexcept(false)
-    : native_window{}, native_display{native} {
-    display = eglGetDisplay(native_display);
+egl_helper_t::egl_helper_t(EGLNativeDisplayType native) noexcept(false)
+    : native_window{}, native_display{native}, display{eglGetDisplay(native_display)} {
+    ;
     if (eglGetError() != EGL_SUCCESS) {
         throw runtime_error{"eglGetDisplay(EGL_DEFAULT_DISPLAY)"};
     }
@@ -15,16 +17,15 @@ egl_bundle_t::egl_bundle_t(EGLNativeDisplayType native) noexcept(false)
     if (eglGetError() != EGL_SUCCESS) {
         throw runtime_error{"eglInitialize"};
     }
-    EGLint count = 0;
-    eglChooseConfig(display, nullptr, &config, 1, &count);
-    if (eglGetError() != EGL_SUCCESS) {
-        throw runtime_error{"eglChooseConfig"};
-    }
     if (eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) {
         throw runtime_error{"eglBindAPI(EGL_OPENGL_ES_API)"};
     }
-    const EGLint attrs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
-    context = eglCreateContext(display, config, EGL_NO_CONTEXT, attrs);
+    eglChooseConfig(display, nullptr, configs, 10, &count);
+    if (eglGetError() != EGL_SUCCESS) {
+        throw runtime_error{"eglChooseConfig"};
+    }
+    const EGLint attrs[] = {EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 1, EGL_NONE};
+    context = eglCreateContext(display, configs[0], EGL_NO_CONTEXT, attrs);
     if (eglGetError() != EGL_SUCCESS) {
         throw runtime_error{"eglCreateContext"};
     }
@@ -35,7 +36,8 @@ egl_bundle_t::egl_bundle_t(EGLNativeDisplayType native) noexcept(false)
 }
 
 #if defined(_WIN32)
-egl_bundle_t::~egl_bundle_t() noexcept {
+
+egl_helper_t::~egl_helper_t() noexcept {
     // Win32
     if (display)
         ReleaseDC(native_window, native_display);
@@ -47,21 +49,9 @@ egl_bundle_t::~egl_bundle_t() noexcept {
     if (display != EGL_NO_DISPLAY)
         eglTerminate(display);
 }
-#else
-egl_bundle_t::~egl_bundle_t() noexcept {
-    // EGL
-    if (surface != EGL_NO_SURFACE)
-        eglDestroySurface(display, surface);
-    if (context != EGL_NO_CONTEXT)
-        eglDestroyContext(display, context);
-    if (display != EGL_NO_DISPLAY)
-        eglTerminate(display);
-}
-#endif
 
-#if __has_include(<EGL/eglext_angle.h>)
-egl_bundle_t::egl_bundle_t(EGLNativeWindowType native,
-                           bool is_console) noexcept(false)
+/// @see https://www.saschawillems.de/blog/2015/04/19/using-opengl-es-on-windows-desktops-via-egl/
+egl_helper_t::egl_helper_t(EGLNativeWindowType native, bool is_console) noexcept(false)
     : native_window{native}, native_display{GetDC(native)} {
     {
         const EGLint attrs[] = {EGL_PLATFORM_ANGLE_TYPE_ANGLE,
@@ -86,22 +76,20 @@ egl_bundle_t::egl_bundle_t(EGLNativeWindowType native,
     // Choose a config
     {
         const EGLint attrs[] = {EGL_NONE};
-        EGLint num_attrs = 0;
-        if (eglChooseConfig(display, attrs, &config, 1, &num_attrs) != EGL_TRUE)
+        if (eglChooseConfig(display, attrs, configs, 10, &count) != EGL_TRUE)
             throw runtime_error{"eglChooseConfig"};
     }
     if (is_console == false) {
-        const EGLint attrs[] = {EGL_DIRECT_COMPOSITION_ANGLE, EGL_TRUE,
-                                EGL_NONE};
+        const EGLint attrs[] = {EGL_DIRECT_COMPOSITION_ANGLE, EGL_TRUE, EGL_NONE};
         // Create window surface
-        surface = eglCreateWindowSurface(display, config, native_window, attrs);
+        surface = eglCreateWindowSurface(display, configs[0], native_window, attrs);
         if (surface == nullptr)
             throw runtime_error{"eglCreateWindowSurface"};
     }
     // Create EGL context
     {
-        const EGLint attrs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
-        context = eglCreateContext(display, config, EGL_NO_CONTEXT, attrs);
+        const EGLint attrs[] = {EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 1, EGL_NONE};
+        context = eglCreateContext(display, configs[0], EGL_NO_CONTEXT, attrs);
         if (eglGetError() != EGL_SUCCESS)
             throw runtime_error{"eglCreateContext"};
     }
@@ -111,5 +99,15 @@ egl_bundle_t::egl_bundle_t(EGLNativeWindowType native,
         if (eglGetError() != EGL_SUCCESS)
             throw runtime_error{"eglMakeCurrent"};
     }
+}
+#else
+egl_helper_t::~egl_helper_t() noexcept {
+    // EGL
+    if (surface != EGL_NO_SURFACE)
+        eglDestroySurface(display, surface);
+    if (context != EGL_NO_CONTEXT)
+        eglDestroyContext(display, context);
+    if (display != EGL_NO_DISPLAY)
+        eglTerminate(display);
 }
 #endif

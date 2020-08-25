@@ -2,6 +2,23 @@
 
 using namespace std;
 
+class opengl_error_category_t final : public error_category {
+    const char* name() const noexcept override {
+        return "OpenGL";
+    }
+    string message(int ec) const override {
+        constexpr auto bufsz = 40;
+        char buf[bufsz]{};
+        const auto len = snprintf(buf, bufsz, "error %5d(%4x)", ec, ec);
+        return {buf, static_cast<size_t>(len)};
+    }
+};
+
+opengl_error_category_t cat{};
+error_category& get_opengl_category() noexcept {
+    return cat;
+};
+
 opengl_vao_t::opengl_vao_t() noexcept {
     glGenVertexArrays(1, &name);
 }
@@ -9,8 +26,7 @@ opengl_vao_t::~opengl_vao_t() noexcept {
     glDeleteVertexArrays(1, &name);
 }
 
-bool opengl_shader_program_t::get_shader_info(string& message, GLuint shader,
-                                              GLenum status_name) noexcept {
+bool opengl_shader_program_t::get_shader_info(string& message, GLuint shader, GLenum status_name) noexcept {
     GLint info = GL_FALSE;
     glGetShaderiv(shader, status_name, &info);
     if (info != GL_TRUE) {
@@ -22,8 +38,7 @@ bool opengl_shader_program_t::get_shader_info(string& message, GLuint shader,
     return info;
 }
 
-bool opengl_shader_program_t::get_program_info(string& message, GLuint program,
-                                               GLenum status_name) noexcept {
+bool opengl_shader_program_t::get_program_info(string& message, GLuint program, GLenum status_name) noexcept {
     GLint info = GL_TRUE;
     glGetProgramiv(program, status_name, &info);
     if (info != GL_TRUE) {
@@ -35,8 +50,8 @@ bool opengl_shader_program_t::get_program_info(string& message, GLuint program,
     return info;
 }
 
-GLuint opengl_shader_program_t::create_compile_attach(
-    GLuint program, GLenum shader_type, string_view code) noexcept(false) {
+GLuint opengl_shader_program_t::create_compile_attach(GLuint program, GLenum shader_type,
+                                                      string_view code) noexcept(false) {
     auto shader = glCreateShader(shader_type);
     const GLchar* begin = code.data();
     const GLint len = code.length();
@@ -50,12 +65,10 @@ GLuint opengl_shader_program_t::create_compile_attach(
     return shader;
 }
 
-opengl_shader_program_t::opengl_shader_program_t(
-    string_view vtxt, //
-    string_view ftxt) noexcept(false)
-    : id{glCreateProgram()}, vs{create_compile_attach(id, GL_VERTEX_SHADER,
-                                                      vtxt)},
-      fs{create_compile_attach(id, GL_FRAGMENT_SHADER, ftxt)} {
+opengl_shader_program_t::opengl_shader_program_t(string_view vtxt, //
+                                                 string_view ftxt) noexcept(false)
+    : id{glCreateProgram()}, vs{create_compile_attach(id, GL_VERTEX_SHADER, vtxt)}, fs{create_compile_attach(
+                                                                                        id, GL_FRAGMENT_SHADER, ftxt)} {
     glLinkProgram(id);
     string message{};
     if (get_program_info(message, id, GL_LINK_STATUS) == false)
@@ -83,8 +96,7 @@ opengl_texture_t::operator bool() const noexcept {
     return glIsTexture(this->name);
 }
 
-opengl_texture_t::opengl_texture_t(GLuint _name, GLenum _target) noexcept(false)
-    : name{_name}, target{_target} {
+opengl_texture_t::opengl_texture_t(GLuint _name, GLenum _target) noexcept(false) : name{_name}, target{_target} {
     if (glIsTexture(this->name) == false)
         throw invalid_argument{"not texture"};
 }
@@ -104,8 +116,7 @@ opengl_texture_t::~opengl_texture_t() noexcept(false) {
         throw system_error{ec, get_opengl_category(), "glDeleteTextures"};
 }
 
-GLenum opengl_texture_t::update(uint16_t width, uint16_t height,
-                                const void* ptr) noexcept {
+GLenum opengl_texture_t::update(uint16_t width, uint16_t height, const void* ptr) noexcept {
     target = GL_TEXTURE_2D;
     glBindTexture(target, name);
     glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -121,8 +132,7 @@ GLenum opengl_texture_t::update(uint16_t width, uint16_t height,
     return ec;
 }
 
-opengl_framebuffer_t::opengl_framebuffer_t(uint16_t width,
-                                           uint16_t height) noexcept(false) {
+opengl_framebuffer_t::opengl_framebuffer_t(uint16_t width, uint16_t height) noexcept(false) {
     if (width * height == 0)
         throw invalid_argument{"width * height == 0"};
     glGenFramebuffers(1, &name);
@@ -134,20 +144,15 @@ opengl_framebuffer_t::opengl_framebuffer_t(uint16_t width,
         glBindRenderbuffer(GL_RENDERBUFFER, buffers[0]);
         glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
         if (int ec = glGetError())
-            throw system_error{ec, get_opengl_category(),
-                               "glRenderbufferStorage"};
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                  GL_RENDERBUFFER, buffers[0]);
+            throw system_error{ec, get_opengl_category(), "glRenderbufferStorage"};
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, buffers[0]);
     }
     {
         glBindRenderbuffer(GL_RENDERBUFFER, buffers[1]);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width,
-                              height);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height);
         if (int ec = glGetError())
-            throw system_error{ec, get_opengl_category(),
-                               "glRenderbufferStorage"};
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                                  GL_RENDERBUFFER, buffers[1]);
+            throw system_error{ec, get_opengl_category(), "glRenderbufferStorage"};
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, buffers[1]);
     }
     glBindRenderbuffer(GL_RENDERBUFFER, 0);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -163,27 +168,9 @@ GLenum opengl_framebuffer_t::bind(void*) noexcept {
     return glGetError();
 }
 
-GLenum opengl_framebuffer_t::read_pixels(uint16_t width, uint16_t height,
-                                         void* pixels) noexcept {
+GLenum opengl_framebuffer_t::read_pixels(uint16_t width, uint16_t height, void* pixels) noexcept {
     glBindFramebuffer(GL_FRAMEBUFFER, name);
     glReadPixels(0, 0, width, height, //
                  GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     return glGetError();
 }
-
-class opengl_error_category_t final : public error_category {
-    const char* name() const noexcept override {
-        return "OpenGL";
-    }
-    string message(int ec) const override {
-        constexpr auto bufsz = 40;
-        char buf[bufsz]{};
-        const auto len = snprintf(buf, bufsz, "error %5d(%4x)", ec, ec);
-        return {buf, static_cast<size_t>(len)};
-    }
-};
-
-opengl_error_category_t cat{};
-error_category& get_opengl_category() noexcept {
-    return cat;
-};
