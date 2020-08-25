@@ -1,4 +1,4 @@
-#include "opengl.h"
+#include <opengl_1.h>
 #if __has_include(<EGL/eglext_angle.h>)
 #include <EGL/eglext_angle.h>
 #endif
@@ -42,10 +42,12 @@ egl_helper_t::~egl_helper_t() noexcept {
     if (display)
         ReleaseDC(native_window, native_display);
     // EGL
+    if (context != EGL_NO_CONTEXT) {
+        eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        eglDestroyContext(display, context);
+    }
     if (surface != EGL_NO_SURFACE)
         eglDestroySurface(display, surface);
-    if (context != EGL_NO_CONTEXT)
-        eglDestroyContext(display, context);
     if (display != EGL_NO_DISPLAY)
         eglTerminate(display);
 }

@@ -3,13 +3,13 @@
  * @see https://github.com/google/angle/blob/master/util/windows/win32/Win32Window.cpp 
  */
 #include <catch2/catch.hpp>
+#include <cwchar>
 #include <spdlog/spdlog.h>
 
-#include "opengl.h"
+// clang-format off
+#include <opengl_1.h>
 #include <EGL/eglext_angle.h>
 
-// DirectX 11
-// clang-format off
 #include <comdef.h>
 #include <wrl/client.h>
 #include <d3d11.h>
@@ -119,6 +119,21 @@ struct dx11_device_t final {
             FAILED(hr))
             throw _com_error{hr};
     }
+    explicit dx11_device_t(ComPtr<IDXGIFactory> factory) noexcept(false) : handle{}, context{}, level{} {
+        IDXGIAdapter* adapter = nullptr;
+        for (auto i = 0u; factory->EnumAdapters(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+            DXGI_ADAPTER_DESC info{};
+            if (auto hr = adapter->GetDesc(&info); FAILED(hr))
+                throw _com_error{hr};
+            //if (wcsstr(info.Description, L"NVIDIA"))
+            //    break;
+        }
+        // will select the last device (== nullptr)
+        if (auto hr = D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_HARDWARE, 0, 0, nullptr, 0, //
+                                        D3D11_SDK_VERSION, handle.GetAddressOf(), &level, context.GetAddressOf());
+            FAILED(hr))
+            throw _com_error{hr};
+    }
 };
 TEST_CASE("eglGetProcAddress == GetProcAddress", "[egl]") {
     auto hmodule = LoadLibraryW(L"libEGL");
@@ -140,6 +155,8 @@ TEST_CASE("eglGetProcAddress == GetProcAddress", "[egl]") {
 }
 
 TEST_CASE("Dx11 Device for ANGLE", "[egl]") {
+    auto stream = get_current_stream();
+
     PFNEGLCREATEDEVICEANGLEPROC createDevice =
         reinterpret_cast<PFNEGLCREATEDEVICEANGLEPROC>(eglGetProcAddress("eglCreateDeviceANGLE"));
     REQUIRE(createDevice);
@@ -147,7 +164,12 @@ TEST_CASE("Dx11 Device for ANGLE", "[egl]") {
         reinterpret_cast<PFNEGLRELEASEDEVICEANGLEPROC>(eglGetProcAddress("eglReleaseDeviceANGLE"));
     REQUIRE(releaseDevice);
 
-    dx11_device_t dx11_device{};
+    ComPtr<IDXGIFactory> factory = nullptr;
+    if (auto hr = CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)factory.GetAddressOf()); FAILED(hr))
+        throw _com_error{hr};
+    REQUIRE(factory);
+
+    dx11_device_t dx11_device{factory};
     EGLDeviceEXT device = createDevice(EGL_D3D11_DEVICE_ANGLE, dx11_device.handle.Get(), nullptr);
     REQUIRE(device != EGL_NO_DEVICE_EXT);
     REQUIRE(eglGetError() == EGL_SUCCESS);
@@ -161,6 +183,24 @@ TEST_CASE("Dx11 Device for ANGLE", "[egl]") {
         ID3D11Device* handle = reinterpret_cast<ID3D11Device*>(attr);
         REQUIRE(handle);
         REQUIRE(dx11_device.level == handle->GetFeatureLevel());
+    }
+    SECTION("EGLDisplay from device") {
+        // Create an EGLDisplay using the EGLDevice
+        EGLDisplay display = eglGetPlatformDisplayEXT(EGL_PLATFORM_DEVICE_EXT, device, nullptr);
+        REQUIRE(display != EGL_NO_DISPLAY);
+        auto on_return = gsl::finally([display]() { REQUIRE(eglTerminate(display)); });
+
+        EGLint major = 0, minor = 0;
+        if (eglInitialize(display, &major, &minor) == false)
+            FAIL(eglGetError());
+        REQUIRE(major == 1); // expect 1.4+
+        REQUIRE(minor >= 4);
+
+        const EGLint attrs[] = {EGL_NONE};
+        EGLint count = 0;
+        if (eglChooseConfig(display, attrs, nullptr, 0, &count) == false)
+            FAIL(eglGetError());
+        REQUIRE(count);
     }
 }
 

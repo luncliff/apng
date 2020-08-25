@@ -1,4 +1,4 @@
-#include "opengl.h"
+#include <opengl_1.h>
 
 using namespace std;
 

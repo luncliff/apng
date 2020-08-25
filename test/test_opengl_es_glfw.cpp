@@ -3,7 +3,7 @@
 #include <gsl/gsl>
 #include <type_traits>
 
-#include "opengl.h"
+#include <opengl_1.h>
 #define GLFW_INCLUDE_ES3
 #define GLFW_INCLUDE_GLEXT
 #include <GLFW/glfw3.h>
@@ -22,13 +22,16 @@ TEST_CASE("GLFW + OpenGL ES", "[opengl][glfw]") {
         FAIL(message);
     }
     glfwMakeContextCurrent(window.get());
-    const auto context = eglGetCurrentContext();
-    REQUIRE(context != EGL_NO_CONTEXT);
 
-    SECTION("swap buffer / poll event") {
-        auto repeat = 10;
+    SECTION("eglGetCurrentContext") {
+        REQUIRE(eglGetCurrentContext() != EGL_NO_CONTEXT);
+        REQUIRE(glGetString(GL_SHADING_LANGUAGE_VERSION));
+    }
+    SECTION("poll event / swap buffer") {
+        auto repeat = 120;
         while (glfwWindowShouldClose(window.get()) == false && repeat--) {
             glfwPollEvents();
+            glClearColor(0, 0, static_cast<float>(repeat) / 255, 1);
             glClear(GL_COLOR_BUFFER_BIT);
             // ...
             glfwSwapBuffers(window.get());
