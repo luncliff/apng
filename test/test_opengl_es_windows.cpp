@@ -28,27 +28,6 @@ using namespace Microsoft::WRL;
 
 auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger>;
 
-TEST_CASE("eglQueryString", "[egl]") {
-    auto stream = get_current_stream();
-    //EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-
-    SECTION("EGL_EXTENSIONS") {
-        stream->info("EGL:");
-        const auto txt = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
-        REQUIRE(txt);
-        const auto txtlen = strlen(txt);
-        stream->info(" - EGL_EXTENSIONS:");
-        auto offset = 0;
-        for (auto i = 0u; i < txtlen; ++i) {
-            if (isspace(txt[i]) == false)
-                continue;
-            const auto extension = string_view{txt + offset, i - offset};
-            stream->info("   - {}", extension);
-            offset = ++i;
-        }
-    }
-}
-
 TEST_CASE("without window/display", "[egl]") {
     auto stream = get_current_stream();
 
@@ -76,6 +55,26 @@ TEST_CASE("without window/display", "[egl]") {
         const EGLSurface surface_1 = EGL_NO_SURFACE; // draw
         eglMakeCurrent(display, surface_1, surface_0, context);
         REQUIRE(eglGetError() == EGL_SUCCESS);
+
+        const auto version = eglQueryString(display, EGL_VERSION);
+        const auto vendor = eglQueryString(display, EGL_VENDOR);
+        const auto api = eglQueryString(display, EGL_CLIENT_APIS);
+        stream->info("EGL:");
+        stream->info(" - EGL_VERSION: {}", version);
+        stream->info(" - EGL_VENDOR: {}", vendor);
+        stream->info(" - EGL_CLIENT_APIS: {}", api);
+        if (const auto txt = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS)) {
+            stream->info(" - EGL_EXTENSIONS:");
+            const auto txtlen = strlen(txt);
+            auto offset = 0;
+            for (auto i = 0u; i < txtlen; ++i) {
+                if (isspace(txt[i]) == false)
+                    continue;
+                const auto extension = string_view{txt + offset, i - offset};
+                stream->info("   - {}", extension);
+                offset = ++i;
+            }
+        }
     }
 
     SECTION("default display") {
@@ -107,6 +106,44 @@ TEST_CASE("without window/display", "[egl]") {
     }
 }
 
+TEST_CASE("eglGetProcAddress != GetProcAddress", "[egl]") {
+    auto hmodule = LoadLibraryW(L"libEGL");
+    REQUIRE(hmodule);
+    auto on_return = gsl::finally([hmodule]() { REQUIRE(FreeLibrary(hmodule)); });
+
+    SECTION("eglCreateDeviceANGLE") {
+        // both symbol must exist, but their address may different
+        void* lhs = eglGetProcAddress("eglCreateDeviceANGLE");
+        void* rhs = GetProcAddress(hmodule, "eglCreateDeviceANGLE");
+        REQUIRE(lhs);
+        REQUIRE(rhs);
+        REQUIRE(lhs != rhs);
+    }
+    SECTION("eglReleaseDeviceANGLE") {
+        void* lhs = eglGetProcAddress("eglReleaseDeviceANGLE");
+        void* rhs = GetProcAddress(hmodule, "eglReleaseDeviceANGLE");
+        REQUIRE(lhs);
+        REQUIRE(rhs);
+        REQUIRE(lhs != rhs);
+    }
+}
+
+TEST_CASE("GetProcAddress", "[opengl]") {
+    auto hmodule = LoadLibraryW(L"libGLESv2");
+    REQUIRE(hmodule);
+    auto on_return = gsl::finally([hmodule]() { REQUIRE(FreeLibrary(hmodule)); });
+
+    SECTION("glMapBufferRange") {
+        void* symbol = GetProcAddress(hmodule, "glMapBufferRange");
+        REQUIRE(symbol);
+        REQUIRE(eglGetProcAddress("glMapBufferRange"));
+    }
+    SECTION("glUnmapBuffer") {
+        void* symbol = GetProcAddress(hmodule, "glUnmapBuffer");
+        REQUIRE(symbol);
+    }
+}
+
 struct dx11_device_t final {
     ComPtr<ID3D11Device> handle;
     ComPtr<ID3D11DeviceContext> context;
@@ -135,28 +172,8 @@ struct dx11_device_t final {
             throw _com_error{hr};
     }
 };
-TEST_CASE("eglGetProcAddress == GetProcAddress", "[egl]") {
-    auto hmodule = LoadLibraryW(L"libEGL");
-    REQUIRE(hmodule);
-    auto on_return = gsl::finally([hmodule]() { REQUIRE(FreeLibrary(hmodule)); });
-
-    // both symbol must exist, but their address may different
-    void* lhs = eglGetProcAddress("eglCreateDeviceANGLE");
-    void* rhs = GetProcAddress(hmodule, "eglCreateDeviceANGLE");
-    REQUIRE(lhs);
-    REQUIRE(rhs);
-    REQUIRE(lhs != rhs);
-
-    lhs = eglGetProcAddress("eglReleaseDeviceANGLE");
-    rhs = GetProcAddress(hmodule, "eglReleaseDeviceANGLE");
-    REQUIRE(lhs);
-    REQUIRE(rhs);
-    REQUIRE(lhs != rhs);
-}
 
 TEST_CASE("Dx11 Device for ANGLE", "[egl]") {
-    auto stream = get_current_stream();
-
     PFNEGLCREATEDEVICEANGLEPROC createDevice =
         reinterpret_cast<PFNEGLCREATEDEVICEANGLEPROC>(eglGetProcAddress("eglCreateDeviceANGLE"));
     REQUIRE(createDevice);
@@ -169,8 +186,9 @@ TEST_CASE("Dx11 Device for ANGLE", "[egl]") {
         throw _com_error{hr};
     REQUIRE(factory);
 
-    dx11_device_t dx11_device{factory};
-    EGLDeviceEXT device = createDevice(EGL_D3D11_DEVICE_ANGLE, dx11_device.handle.Get(), nullptr);
+    dx11_device_t pdevice{factory};
+
+    EGLDeviceEXT device = createDevice(EGL_D3D11_DEVICE_ANGLE, pdevice.handle.Get(), nullptr);
     REQUIRE(device != EGL_NO_DEVICE_EXT);
     REQUIRE(eglGetError() == EGL_SUCCESS);
     auto on_return = gsl::finally([releaseDevice, device]() { releaseDevice(device); });
@@ -182,7 +200,7 @@ TEST_CASE("Dx11 Device for ANGLE", "[egl]") {
 
         ID3D11Device* handle = reinterpret_cast<ID3D11Device*>(attr);
         REQUIRE(handle);
-        REQUIRE(dx11_device.level == handle->GetFeatureLevel());
+        REQUIRE(pdevice.level == handle->GetFeatureLevel());
     }
     SECTION("EGLDisplay from device") {
         // Create an EGLDisplay using the EGLDevice

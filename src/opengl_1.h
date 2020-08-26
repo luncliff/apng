@@ -26,7 +26,7 @@ struct egl_helper_t {
     EGLSurface surface = EGL_NO_SURFACE;
 
   public:
-    explicit egl_helper_t(EGLNativeDisplayType native = EGL_DEFAULT_DISPLAY) noexcept(false);
+    explicit egl_helper_t(EGLNativeDisplayType native) noexcept(false);
     egl_helper_t(EGLNativeWindowType native, bool is_console) noexcept(false);
     ~egl_helper_t() noexcept;
 };

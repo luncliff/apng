@@ -40,6 +40,48 @@ TEST_CASE("GLFW + OpenGL ES", "[opengl][glfw]") {
     }
 }
 
+TEST_CASE("OpenGL ES resources", "[opengl][glfw]") {
+    auto on_return = start_opengl_test();
+    auto window = create_opengl_window("GLFW3");
+    if (window == nullptr) {
+        const char* message = nullptr;
+        glfwGetError(&message);
+        FAIL(message);
+    }
+    glfwMakeContextCurrent(window.get());
+    GLint w = 0, h = 0;
+    glfwGetFramebufferSize(window.get(), &w, &h);
+
+    SECTION("Pixel Buffer Objects") {
+        GLuint pbos[2]{}; // 0 - GL_STREAM_READ, 1 - GL_STREAM_DRAW
+        glGenBuffers(2, pbos);
+        REQUIRE(glGetError() == GL_NO_ERROR);
+        auto on_return = gsl::finally([pbos]() {
+            glDeleteBuffers(2, pbos);
+            REQUIRE(glGetError() == GL_NO_ERROR);
+        });
+        // 0 is for read (download)
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[0]);
+        glBufferData(GL_PIXEL_PACK_BUFFER, w * h * 4, nullptr, GL_STREAM_READ);
+        REQUIRE(glGetError() == GL_NO_ERROR);
+        const void* mapping0 = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, w * h * 4, //
+                                                GL_MAP_READ_BIT);
+        REQUIRE(glGetError() == GL_NO_ERROR);
+        REQUIRE(mapping0);
+        REQUIRE(glUnmapBuffer(GL_PIXEL_PACK_BUFFER));
+
+        // 1 is for write (upload)
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbos[1]);
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, w * h * 4, nullptr, GL_STREAM_DRAW);
+        REQUIRE(glGetError() == GL_NO_ERROR);
+        const void* mapping1 = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, w * h * 4, //
+                                                GL_MAP_READ_BIT | GL_MAP_WRITE_BIT);
+        REQUIRE(glGetError() == GL_NO_ERROR);
+        REQUIRE(mapping1);
+        REQUIRE(glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER));
+    }
+}
+
 auto start_opengl_test() -> gsl::final_action<void (*)()> {
     REQUIRE(glfwInit());
     return gsl::finally(&glfwTerminate);
