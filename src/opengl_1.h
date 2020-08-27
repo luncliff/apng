@@ -2,7 +2,7 @@
 #include <gsl/gsl>
 #include <string_view>
 #include <system_error>
-
+#include <filesystem>
 #if __has_include(<angle_gl.h>)
 #include <angle_gl.h>
 #endif
@@ -32,6 +32,11 @@ struct egl_helper_t {
 };
 
 #endif // <EGL/egl.h>
+
+namespace fs = std::filesystem;
+
+auto open(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)>;
+auto create(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)>;
 
 /**
  * @brief `std::error_category` for `std::system_error` in this module

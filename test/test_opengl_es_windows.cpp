@@ -79,18 +79,38 @@ TEST_CASE("without window/display", "[egl]") {
 
     SECTION("default display") {
         egl_helper_t egl{EGL_DEFAULT_DISPLAY};
+
         stream->info("OpenGL(EGL_DEFAULT_DISPLAY):");
         stream->info(" - GL_VERSION: {:s}", glGetString(GL_VERSION));
         stream->info(" - GL_VENDOR: {:s}", glGetString(GL_VENDOR));
         stream->info(" - GL_RENDERER: {:s}", glGetString(GL_RENDERER));
         stream->info(" - GL_SHADING_LANGUAGE_VERSION: {:s}", glGetString(GL_SHADING_LANGUAGE_VERSION));
+
+        // see https://www.khronos.org/registry/OpenGL/extensions/
         GLint count = 0;
-        glGetIntegerv(GL_EXTENSIONS, &count);
+        glGetIntegerv(GL_NUM_EXTENSIONS, &count);
         if (count > 0)
             stream->info(" - GL_EXTENSIONS:");
         for (auto i = 0; i < count; ++i)
             stream->info("   - {:s}", glGetStringi(GL_EXTENSIONS, i));
+
+        GLint value = 0;
+        glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &value);
+        stream->info(" - GL_MAX_UNIFORM_BLOCK_SIZE: {}", value);
+        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &value);
+        stream->info(" - GL_MAX_TEXTURE_BUFFER_SIZE: {}", value);
+        glGetIntegerv(GL_MAX_RENDERBUFFER_SIZE, &value);
+        stream->info(" - GL_MAX_RENDERBUFFER_SIZE: {}", value);
+
+        glGetIntegerv(GL_MAX_SAMPLES, &value);
+        stream->info(" - GL_MAX_SAMPLES: {}", value);
+        glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &value);
+        stream->info(" - GL_MAX_COLOR_ATTACHMENTS: {}", value);
+
+        glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_SIZE, &value);
+        stream->info(" - GL_MAX_COMPUTE_WORK_GROUP_SIZE: {}", value);
     }
+
     SECTION("console window") {
         // https://support.microsoft.com/en-us/help/124103/how-to-obtain-a-console-window-handle-hwnd
         auto hwnd_from_console_title = []() {

@@ -1,7 +1,6 @@
 #include <catch2/catch.hpp>
-
 #include <gsl/gsl>
-#include <type_traits>
+#include <spdlog/spdlog.h>
 
 #include <opengl_1.h>
 #define GLFW_INCLUDE_ES3
@@ -10,6 +9,7 @@
 
 using namespace std;
 
+auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger>;
 auto start_opengl_test() -> gsl::final_action<void (*)()>;
 auto create_opengl_window(gsl::czstring<> window_name) noexcept -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>;
 
@@ -41,6 +41,7 @@ TEST_CASE("GLFW + OpenGL ES", "[opengl][glfw]") {
 }
 
 TEST_CASE("OpenGL ES resources", "[opengl][glfw]") {
+    auto stream = get_current_stream();
     auto on_return = start_opengl_test();
     auto window = create_opengl_window("GLFW3");
     if (window == nullptr) {
@@ -51,8 +52,22 @@ TEST_CASE("OpenGL ES resources", "[opengl][glfw]") {
     glfwMakeContextCurrent(window.get());
     GLint w = 0, h = 0;
     glfwGetFramebufferSize(window.get(), &w, &h);
+    glViewport(0, 0, w, h);
+    REQUIRE(glGetError() == GL_NO_ERROR);
 
-    SECTION("Pixel Buffer Objects") {
+    SECTION("framebuffer parameter") {
+        GLint fbo{};
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &fbo);
+        REQUIRE(glGetError() == GL_NO_ERROR);
+        GLint value{};
+        glGetFramebufferParameteriv(GL_DRAW_FRAMEBUFFER, GL_FRAMEBUFFER_DEFAULT_WIDTH, &value);
+        if (fbo == 0)
+            // glGetFramebufferParameteriv errors if fbo is default framebuffer.
+            REQUIRE(glGetError() == GL_INVALID_OPERATION);
+        else
+            REQUIRE(glGetError() == GL_NO_ERROR);
+    }
+    SECTION("pixel buffer unpack") {
         GLuint pbos[2]{}; // 0 - GL_STREAM_READ, 1 - GL_STREAM_DRAW
         glGenBuffers(2, pbos);
         REQUIRE(glGetError() == GL_NO_ERROR);
@@ -60,25 +75,74 @@ TEST_CASE("OpenGL ES resources", "[opengl][glfw]") {
             glDeleteBuffers(2, pbos);
             REQUIRE(glGetError() == GL_NO_ERROR);
         });
-        // 0 is for read (download)
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[0]);
-        glBufferData(GL_PIXEL_PACK_BUFFER, w * h * 4, nullptr, GL_STREAM_READ);
-        REQUIRE(glGetError() == GL_NO_ERROR);
-        const void* mapping0 = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, w * h * 4, //
-                                                GL_MAP_READ_BIT);
-        REQUIRE(glGetError() == GL_NO_ERROR);
-        REQUIRE(mapping0);
-        REQUIRE(glUnmapBuffer(GL_PIXEL_PACK_BUFFER));
-
         // 1 is for write (upload)
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbos[1]);
         glBufferData(GL_PIXEL_UNPACK_BUFFER, w * h * 4, nullptr, GL_STREAM_DRAW);
         REQUIRE(glGetError() == GL_NO_ERROR);
-        const void* mapping1 = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, w * h * 4, //
-                                                GL_MAP_READ_BIT | GL_MAP_WRITE_BIT);
+        void* mapping1 = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, w * h * 4, //
+                                          GL_MAP_READ_BIT | GL_MAP_WRITE_BIT);
         REQUIRE(glGetError() == GL_NO_ERROR);
         REQUIRE(mapping1);
         REQUIRE(glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER));
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    }
+    SECTION("pixel buffer pack") {
+        GLuint pbos[2]{};
+        glGenBuffers(2, pbos);
+        REQUIRE(glGetError() == GL_NO_ERROR);
+        auto on_return = gsl::finally([pbos]() {
+            glDeleteBuffers(2, pbos);
+            REQUIRE(glGetError() == GL_NO_ERROR);
+        });
+
+        for (auto i : {0, 1}) {
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[i]);
+            glBufferData(GL_PIXEL_PACK_BUFFER, w * h * 4, nullptr, GL_STREAM_READ);
+            REQUIRE(glGetError() == GL_NO_ERROR);
+            REQUIRE(glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, w * h * 4, GL_MAP_READ_BIT));
+            REQUIRE(glUnmapBuffer(GL_PIXEL_PACK_BUFFER)); // must be unmapped before glReadPixels
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+            REQUIRE(glGetError() == GL_NO_ERROR);
+        }
+
+        // read from the latest draw result
+        glReadBuffer(GL_BACK);
+        REQUIRE(glGetError() == GL_NO_ERROR);
+
+        // render + present
+        for (auto i : {0, 1}) {
+            glClearColor(0, static_cast<float>(i), 1, 1); // 0 --BA, 1 -GBA
+            glClear(GL_COLOR_BUFFER_BIT);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[i]);
+            glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, 0); // fbo -> pbo
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+            REQUIRE(glGetError() == GL_NO_ERROR);
+            glfwSwapBuffers(window.get());
+        }
+
+        // create mapping and check the pixel value
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[0]);
+        if (const void* ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, w * h * 4, //
+                                               GL_MAP_READ_BIT)) {
+            // notice glClearColor 0.0f == 255 (black)
+            const uint32_t blue = 0xFF'FF'00'00;
+            uint32_t value = *reinterpret_cast<const uint32_t*>(ptr);
+            REQUIRE(glUnmapBuffer(GL_PIXEL_PACK_BUFFER));
+            REQUIRE(value == blue);
+        } else {
+            FAIL(glGetError());
+        }
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[1]);
+        if (const void* ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, w * h * 4, //
+                                               GL_MAP_READ_BIT)) {
+            // notice glClearColor 0.0f == 255 (black)
+            const uint32_t blue_green = 0xFF'FF'FF'00;
+            uint32_t value = *reinterpret_cast<const uint32_t*>(ptr);
+            REQUIRE(glUnmapBuffer(GL_PIXEL_PACK_BUFFER));
+            REQUIRE(value == blue_green);
+        } else {
+            FAIL(glGetError());
+        }
     }
 }
 
