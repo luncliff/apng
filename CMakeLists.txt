@@ -13,7 +13,7 @@ add_library(graphics SHARED
     src/vulkan.cpp
     src/vulkan_1.h
     src/vulkan_1.cpp
-    src/opengl.h
+    src/opengl_1.h
     src/opengl.cpp
     src/opengl_es.cpp
 )
@@ -135,6 +135,7 @@ add_executable(graphics_test_suite
     # test/test_vulkan_descriptor_set.cpp
     test/test_opengl_es_windows.cpp
     test/test_opengl_es_glfw.cpp
+    test/test_directx.cpp
 )
 add_dependencies(graphics_test_suite
     compile_shaders_glsl
@@ -158,7 +159,7 @@ PUBLIC
 if(MSVC)
     target_compile_options(graphics_test_suite
     PRIVATE
-        /wd4477
+        /wd4477 /utf-8
     )
 else()
     target_compile_options(graphics_test_suite

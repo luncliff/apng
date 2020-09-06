@@ -7,7 +7,9 @@
 #include <angle_gl.h>
 #endif
 #if __has_include(<EGL/egl.h>)
+#ifndef EGL_EGLEXT_PROTOTYPES
 #define EGL_EGLEXT_PROTOTYPES
+#endif
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <EGL/eglplatform.h>

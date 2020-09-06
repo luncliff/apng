@@ -1,4 +1,5 @@
-#define CATCH_CONFIG_MAIN
+//#define CATCH_CONFIG_MAIN
+#define CATCH_CONFIG_RUNNER
 #include <catch2/catch.hpp>
 #define SPDLOG_HEADER_ONLY
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -82,4 +83,9 @@ auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger> {
     stream->set_pattern("%v");
     stream->set_level(level_enum::trace);
     return stream;
+}
+
+int main(int argc, char* argv[]) {
+    setlocale(LC_ALL, "en_US.utf8");
+    return Catch::Session().run(argc, argv);
 }

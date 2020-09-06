@@ -54,7 +54,7 @@ GLuint opengl_shader_program_t::create_compile_attach(GLuint program, GLenum sha
                                                       string_view code) noexcept(false) {
     auto shader = glCreateShader(shader_type);
     const GLchar* begin = code.data();
-    const GLint len = code.length();
+    const GLint len = static_cast<GLint>(code.length());
     glShaderSource(shader, 1, &begin, &len);
     glCompileShader(shader);
     string message{};
