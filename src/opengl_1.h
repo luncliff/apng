@@ -1,10 +1,16 @@
 #pragma once
+#include <filesystem>
 #include <gsl/gsl>
 #include <string_view>
 #include <system_error>
-#include <filesystem>
 #if __has_include(<angle_gl.h>)
 #include <angle_gl.h>
+#else
+#define GL_GLEXT_PROTOTYPES
+#include <GLES3/gl3.h>
+#if __has_include(<GLES3/gl31.h>)
+#include <GLES3/gl31.h>
+#endif
 #endif
 #if __has_include(<EGL/egl.h>)
 #ifndef EGL_EGLEXT_PROTOTYPES

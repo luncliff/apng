@@ -23,10 +23,8 @@ TEST_CASE("GLFW + OpenGL ES", "[opengl][glfw]") {
     }
     glfwMakeContextCurrent(window.get());
 
-    SECTION("eglGetCurrentContext") {
-        REQUIRE(eglGetCurrentContext() != EGL_NO_CONTEXT);
-        REQUIRE(glGetString(GL_SHADING_LANGUAGE_VERSION));
-    }
+    REQUIRE(eglGetCurrentContext() != EGL_NO_CONTEXT);
+    REQUIRE(glGetString(GL_SHADING_LANGUAGE_VERSION));
     SECTION("poll event / swap buffer") {
         auto repeat = 120;
         while (glfwWindowShouldClose(window.get()) == false && repeat--) {
@@ -54,11 +52,11 @@ TEST_CASE("OpenGL ES resources", "[opengl][glfw]") {
     glfwGetFramebufferSize(window.get(), &w, &h);
     glViewport(0, 0, w, h);
     REQUIRE(glGetError() == GL_NO_ERROR);
-
     SECTION("framebuffer parameter") {
         GLint fbo{};
         glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &fbo);
         REQUIRE(glGetError() == GL_NO_ERROR);
+#if defined(GL_FRAMEBUFFER_DEFAULT_WIDTH)
         GLint value{};
         glGetFramebufferParameteriv(GL_DRAW_FRAMEBUFFER, GL_FRAMEBUFFER_DEFAULT_WIDTH, &value);
         if (fbo == 0)
@@ -66,6 +64,7 @@ TEST_CASE("OpenGL ES resources", "[opengl][glfw]") {
             REQUIRE(glGetError() == GL_INVALID_OPERATION);
         else
             REQUIRE(glGetError() == GL_NO_ERROR);
+#endif
     }
     SECTION("pixel buffer unpack") {
         GLuint pbos[2]{}; // 0 - GL_STREAM_READ, 1 - GL_STREAM_DRAW
@@ -170,8 +169,12 @@ auto create_opengl_window(gsl::czstring<> window_name) noexcept -> std::unique_p
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2); // ES 2.0
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 #elif defined(GLFW_INCLUDE_ES3)
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // ES 3.1
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // ES 3.0 ~ 3.1
+#if defined(GL_ES_VERSION_3_1)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+#elif defined(GL_ES_VERSION_3_0)
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+#endif
 #endif
 #endif // defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
 #endif // __APPLE__ || _WIN32

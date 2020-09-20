@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.8)
 project(graphics VERSION 1.0 LANGUAGES CXX)
 
-if(NOT ${CMAKE_TOOLCHAIN_FILE} MATCHES vcpkg.cmake)
+if(NOT CMAKE_TOOLCHAIN_FILE MATCHES vcpkg.cmake)
     message(FATAL_ERROR "requires vcpkg.cmake for CMAKE_TOOLCHAIN_FILE")
 endif()
 message(STATUS "using vcpkg: ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
@@ -35,15 +35,13 @@ PRIVATE
 )
 
 find_package(Threads    REQUIRED)
-find_package(unofficial-angle CONFIG REQUIRED) # vcpkg
 find_package(Vulkan     REQUIRED)
 find_package(spdlog     CONFIG REQUIRED)
 find_package(glm        CONFIG REQUIRED)
 target_link_libraries(graphics
 PUBLIC
     Threads::Threads 
-    glm Vulkan::Vulkan unofficial::angle::libEGL unofficial::angle::libANGLE unofficial::angle::libGLESv2 unofficial::angle::angle_common
-    spdlog::spdlog
+    glm Vulkan::Vulkan spdlog::spdlog
 )
 
 if(CMAKE_CXX_COMPILER_ID MATCHES Clang)
@@ -105,6 +103,52 @@ elseif(APPLE OR UNIX)
     )
 
 endif()
+
+if(DEFINED Qt5_DIR)
+    # Anaconda Qt 5.9 - "C:\\Users\\luncl\\Anaconda3\\Library\\lib\\cmake\\Qt5"
+    # Qt 5.12 - "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2017_64"
+    find_package(Qt5 REQUIRED
+    COMPONENTS
+        Core Widgets OpenGL
+    )
+    get_filename_component(angle_path           ${Qt5_DIR} DIRECTORY ) # msvc2017_64/lib/cmake/
+    get_filename_component(angle_lib_dir        ${angle_path} DIRECTORY ) # msvc2017_64/lib/
+    get_filename_component(angle_path           ${angle_lib_dir} DIRECTORY ) # msvc2017_64/
+    if(Qt5_DIR MATCHES Anaconda3)
+        # Anaconda Qt 5.9 has a different include dir
+        # EGL 1.4 + OpenGL ES 3.0
+        get_filename_component(angle_include_dir    ${angle_path}/include/qt/QtANGLE ABSOLUTE)
+    else()
+        # Qt 5.12
+        # EGL 1.4 + OpenGL ES 3.1
+        get_filename_component(angle_include_dir    ${angle_path}/include/QtANGLE ABSOLUTE)
+    endif()
+    unset(angle_path)
+    message(STATUS "using QtANGLE:")
+    message(STATUS " - ${angle_include_dir}")
+    message(STATUS " - ${angle_lib_dir}")
+
+    target_include_directories(graphics
+    PUBLIC
+        ${angle_include_dir}
+    )
+    target_link_directories(graphics
+    PUBLIC
+        ${angle_lib_dir}
+    )
+    target_link_libraries(graphics
+    PUBLIC
+        libEGL libGLESv2
+    )
+else()
+    message(STATUS "using unofficial-angle")
+    find_package(unofficial-angle CONFIG REQUIRED)
+    target_link_libraries(graphics
+    PUBLIC
+        unofficial::angle::libEGL unofficial::angle::libANGLE unofficial::angle::libGLESv2 unofficial::angle::angle_common
+    )
+endif()
+
 
 find_package(glslang CONFIG REQUIRED)
 find_program(glslc_path

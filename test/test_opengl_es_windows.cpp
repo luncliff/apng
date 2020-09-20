@@ -76,7 +76,8 @@ TEST_CASE("without window/display", "[egl]") {
         REQUIRE(eglGetError() == EGL_SUCCESS);
         CAPTURE(count);
 
-        const EGLContext context = eglCreateContext(display, configs[0], EGL_NO_CONTEXT, NULL);
+        const EGLint attrs[] = {EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 1, EGL_NONE};
+        const EGLContext context = eglCreateContext(display, configs[0], EGL_NO_CONTEXT, attrs);
         REQUIRE(eglGetError() == EGL_SUCCESS);
         auto on_return = gsl::finally([display, context]() {
             eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
@@ -116,9 +117,10 @@ TEST_CASE("without window/display", "[egl]") {
         stream->info(" - GL_MAX_SAMPLES: {}", value);
         glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &value);
         stream->info(" - GL_MAX_COLOR_ATTACHMENTS: {}", value);
-
+#if defined(GL_MAX_COMPUTE_WORK_GROUP_SIZE)
         glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_SIZE, &value);
         stream->info(" - GL_MAX_COMPUTE_WORK_GROUP_SIZE: {}", value);
+#endif
     }
 
     SECTION("console window") {

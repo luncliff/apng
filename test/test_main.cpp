@@ -86,6 +86,6 @@ auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger> {
 }
 
 int main(int argc, char* argv[]) {
-    setlocale(LC_ALL, "en_US.utf8");
+    setlocale(LC_ALL, ".65001");
     return Catch::Session().run(argc, argv);
 }
