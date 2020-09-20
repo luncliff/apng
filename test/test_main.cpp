@@ -1,4 +1,5 @@
 //#define CATCH_CONFIG_MAIN
+//#define CATCH_CONFIG_WINDOWS_CRTDBG
 #define CATCH_CONFIG_RUNNER
 #include <catch2/catch.hpp>
 #define SPDLOG_HEADER_ONLY
@@ -8,6 +9,9 @@
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <gsl/gsl>
+#if defined(_WIN32)
+#include <winrt/Windows.Foundation.h>
+#endif
 
 namespace fs = std::filesystem;
 using namespace std;
@@ -87,5 +91,9 @@ auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger> {
 
 int main(int argc, char* argv[]) {
     setlocale(LC_ALL, ".65001");
+#if defined(_WIN32)
+    winrt::init_apartment();
+    auto on_exit = gsl::finally(&winrt::uninit_apartment);
+#endif
     return Catch::Session().run(argc, argv);
 }

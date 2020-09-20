@@ -1,3 +1,6 @@
+#if defined(_WIN32)
+#include <winrt/Windows.Foundation.h>
+#endif
 #include <filesystem>
 
 namespace fs = std::filesystem;

@@ -3,6 +3,8 @@
 #include <gsl/gsl>
 #include <string_view>
 #include <system_error>
+// #include <memory_resource>
+
 #if __has_include(<angle_gl.h>)
 #include <angle_gl.h>
 #else
@@ -18,7 +20,6 @@
 #endif
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
-#include <EGL/eglplatform.h>
 
 /**
  * @brief EGL Context and other informations + RAII

@@ -1,10 +1,11 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.13)
 project(graphics VERSION 1.0 LANGUAGES CXX)
 
 if(NOT CMAKE_TOOLCHAIN_FILE MATCHES vcpkg.cmake)
     message(FATAL_ERROR "requires vcpkg.cmake for CMAKE_TOOLCHAIN_FILE")
 endif()
 message(STATUS "using vcpkg: ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+# vcpkg install --triplet x64-windows angle directxtk
 
 set(CMAKE_VS_WINRT_BY_DEFAULT true)
 
@@ -29,10 +30,22 @@ find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
 target_include_directories(graphics
 PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    $<BUILD_INTERFACE:${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include>
 PRIVATE
     ${TINYGLTF_INCLUDE_DIRS}
     externals/include
 )
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+    target_link_directories(graphics
+    PUBLIC
+        $<BUILD_INTERFACE:${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/debug/lib>
+    )
+else()
+    target_link_directories(graphics
+    PUBLIC
+        $<BUILD_INTERFACE:${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib>
+    )
+endif()
 
 find_package(Threads    REQUIRED)
 find_package(Vulkan     REQUIRED)
@@ -78,9 +91,9 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES GNU)
 elseif(MSVC)
     target_compile_options(graphics
     PUBLIC
-        /std:c++17
+        /std:c++17 /Zc:__cplusplus
     PRIVATE
-        /W4 
+        /W4 /bigobj /await /permissive-
     )
 endif()
 
@@ -88,6 +101,10 @@ if(WIN32)
     target_compile_definitions(graphics
     PUBLIC
         WIN32_LEAN_AND_MEAN NOMINMAX
+    )
+    target_link_libraries(graphics
+    PUBLIC
+        windowsapp windowscodecs DirectXTK
     )
 
 elseif(CMAKE_SYSTEM_NAME MATCHES Linux)
@@ -145,7 +162,7 @@ else()
     find_package(unofficial-angle CONFIG REQUIRED)
     target_link_libraries(graphics
     PUBLIC
-        unofficial::angle::libEGL unofficial::angle::libANGLE unofficial::angle::libGLESv2 unofficial::angle::angle_common
+        unofficial::angle::libEGL unofficial::angle::libGLESv2 
     )
 endif()
 

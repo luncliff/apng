@@ -27,11 +27,6 @@
           "name": "BUILD_TESTING",
           "value": "true",
           "type": "BOOL"
-        },
-        {
-          "name": "Qt5_DIR",
-          "value": "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2017_64",
-          "type": "PATH"
         }
       ]
     },
