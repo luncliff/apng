@@ -38,7 +38,8 @@ TEST_CASE("GLFW + OpenGL ES", "[opengl][glfw]") {
     }
 }
 
-TEST_CASE("OpenGL ES resources", "[opengl][glfw]") {
+// see https://www.roxlu.com/2014/048/fast-pixel-transfers-with-pixel-buffer-objects
+TEST_CASE("OpenGL PixelBuffer", "[opengl][glfw]") {
     auto stream = get_current_stream();
     auto on_return = start_opengl_test();
     auto window = create_opengl_window("GLFW3");
@@ -52,20 +53,7 @@ TEST_CASE("OpenGL ES resources", "[opengl][glfw]") {
     glfwGetFramebufferSize(window.get(), &w, &h);
     glViewport(0, 0, w, h);
     REQUIRE(glGetError() == GL_NO_ERROR);
-    SECTION("framebuffer parameter") {
-        GLint fbo{};
-        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &fbo);
-        REQUIRE(glGetError() == GL_NO_ERROR);
-#if defined(GL_FRAMEBUFFER_DEFAULT_WIDTH)
-        GLint value{};
-        glGetFramebufferParameteriv(GL_DRAW_FRAMEBUFFER, GL_FRAMEBUFFER_DEFAULT_WIDTH, &value);
-        if (fbo == 0)
-            // glGetFramebufferParameteriv errors if fbo is default framebuffer.
-            REQUIRE(glGetError() == GL_INVALID_OPERATION);
-        else
-            REQUIRE(glGetError() == GL_NO_ERROR);
-#endif
-    }
+
     SECTION("pixel buffer unpack") {
         GLuint pbos[2]{}; // 0 - GL_STREAM_READ, 1 - GL_STREAM_DRAW
         glGenBuffers(2, pbos);
@@ -85,6 +73,7 @@ TEST_CASE("OpenGL ES resources", "[opengl][glfw]") {
         REQUIRE(glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER));
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     }
+
     SECTION("pixel buffer pack") {
         GLuint pbos[2]{};
         glGenBuffers(2, pbos);
@@ -145,6 +134,64 @@ TEST_CASE("OpenGL ES resources", "[opengl][glfw]") {
     }
 }
 
+TEST_CASE("OpenGL readback_t", "[opengl][glfw]") {
+    auto stream = get_current_stream();
+    auto on_return = start_opengl_test();
+    auto window = create_opengl_window("GLFW3");
+    if (window == nullptr) {
+        const char* message = nullptr;
+        glfwGetError(&message);
+        FAIL(message);
+    }
+    glfwMakeContextCurrent(window.get());
+
+    GLint frame[4]{};
+    glGetIntegerv(GL_VIEWPORT, frame);
+    REQUIRE(glGetError() == GL_NO_ERROR);
+    REQUIRE(frame[2] * frame[3] > 0);
+
+    readback_callback_t is_untouched = [](void*, const void* mapping, size_t) {
+        REQUIRE(*reinterpret_cast<const uint32_t*>(mapping) == 0x00'00'00'00); // ABGR in 32 bpp
+    };
+    readback_callback_t is_blue = [](void*, const void* mapping, size_t) {
+        REQUIRE(*reinterpret_cast<const uint32_t*>(mapping) == 0xFF'FF'00'00);
+    };
+    readback_callback_t is_blue_green = [](void*, const void* mapping, size_t) {
+        REQUIRE(*reinterpret_cast<const uint32_t*>(mapping) == 0xFF'FF'FF'00);
+    };
+
+    opengl_readback_t readback{frame[2], frame[3]};
+    glReadBuffer(GL_BACK);
+    REQUIRE(glGetError() == GL_NO_ERROR);
+
+    uint16_t count = 20;
+    while (--count) {
+        auto const front = static_cast<uint16_t>((count + 1) % 2);
+        auto const back = static_cast<uint16_t>(count % 2);
+
+        // perform rendering
+        glClearColor(0, static_cast<float>(back), 1, 1);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // pack the back buffer
+        if (auto ec = readback.pack(back, 0, frame))
+            FAIL(ec);
+
+        // map the front buffer and read
+        if (count == 19) {
+            // if there was no read, the pixel buffer object is clean and must hold zero (0,0,0,0)
+            if (auto ec = readback.map_and_invoke(front, is_untouched, nullptr))
+                FAIL(ec);
+        } else {
+            // if back == 0, the clear color of previous frame is (0,1,1,1). this is blue_green.
+            // if `back` index equals 1, the color is (0,0,1,1), which is blue.
+            if (auto ec = readback.map_and_invoke(front, back == 0 ? is_blue_green : is_blue, nullptr))
+                FAIL(ec);
+        }
+        glfwSwapBuffers(window.get());
+    }
+}
+
 auto start_opengl_test() -> gsl::final_action<void (*)()> {
     REQUIRE(glfwInit());
     return gsl::finally(&glfwTerminate);
@@ -175,6 +222,7 @@ auto create_opengl_window(gsl::czstring<> window_name) noexcept -> std::unique_p
 #elif defined(GL_ES_VERSION_3_0)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 #endif
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE); // ANGLE supports EGL_KHR_debug
 #endif
 #endif // defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
 #endif // __APPLE__ || _WIN32
