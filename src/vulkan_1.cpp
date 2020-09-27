@@ -493,7 +493,7 @@ struct input3_t : vulkan_pipeline_input_t {
         ubo.model = glm::rotate(glm::mat4(1), glm::radians(time), Z);
         ubo.view = glm::lookAt(glm::vec3(2, 2, 2), glm::vec3(0), Z);
         ubo.projection = glm::perspective(glm::radians(45.0f), 1.0f / 1, 0.1f, 10.0f);
-        ubo.projection[1][1] *= -1; // GL -> Vulkan
+        // ubo.projection[1][1] *= -1; // GL -> Vulkan
 
         VkMemoryRequirements requirements{};
         vkGetBufferMemoryRequirements(device, buffers[0], &requirements);

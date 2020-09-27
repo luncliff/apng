@@ -219,8 +219,8 @@ void vulkan_pipeline_t::setup_rasterization_state(VkPipelineRasterizationStateCr
     info.polygonMode = VK_POLYGON_MODE_FILL;
     info.lineWidth = 1.0f;
     info.cullMode = VK_CULL_MODE_BACK_BIT;
-    //info.frontFace = VK_FRONT_FACE_CLOCKWISE; // GL coordinate
-    info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // Vulkan coordinate
+    info.frontFace = VK_FRONT_FACE_CLOCKWISE; // GL coordinate
+    // info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // Vulkan coordinate
     info.depthBiasEnable = VK_FALSE;
     info.depthBiasConstantFactor = 0.0f;
     info.depthBiasClamp = 0.0f;

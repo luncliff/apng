@@ -190,10 +190,10 @@ find_package(Catch2 CONFIG REQUIRED)
 
 add_executable(graphics_test_suite
     test/test_main.cpp
-    # test/test_vulkan_device.cpp
-    # test/test_vulkan_surface_glfw.cpp
-    # test/test_vulkan_pipeline.cpp
-    # test/test_vulkan_descriptor_set.cpp
+    test/test_vulkan_device.cpp
+    test/test_vulkan_surface_glfw.cpp
+    test/test_vulkan_pipeline.cpp
+    test/test_vulkan_descriptor_set.cpp
     test/test_opengl_es_windows.cpp
     test/test_opengl_es_glfw.cpp
     test/test_directx.cpp
@@ -234,4 +234,9 @@ PRIVATE
     ASSET_DIR="${PROJECT_SOURCE_DIR}/assets"
 )
 
-# add_test(NAME test_vulkan COMMAND graphics_test_suite "[vulkan]")
+add_test(NAME test_vulkan COMMAND graphics_test_suite "[vulkan]")
+add_test(NAME test_opengl COMMAND graphics_test_suite "[opengl]")
+if(WIN32)
+add_test(NAME test_opengl_es COMMAND graphics_test_suite "[egl]")
+add_test(NAME test_windows  COMMAND graphics_test_suite "[windows]")
+endif()
