@@ -9,7 +9,10 @@
 #include <opengl_1.h>
 #include <EGL/eglext_angle.h>
 
-#include <winrt/Windows.Foundation.h>
+#include <pplawait.h>
+#include <ppltasks.h>
+#include <winrt/Windows.Foundation.h> // namespace winrt::Windows::Foundation
+#include <winrt/Windows.System.h>     // namespace winrt::Windows::System
 
 #include <d3d11.h>
 #include <d3d11_1.h>
@@ -37,11 +40,11 @@ void print_egl_info(EGLDisplay display, EGLContext context) {
     const auto vendor = eglQueryString(display, EGL_VENDOR);
     const auto api = eglQueryString(display, EGL_CLIENT_APIS);
     stream->info("EGL:");
-    stream->info(" - EGL_VERSION: {}", version);
-    stream->info(" - EGL_VENDOR: {}", vendor);
-    stream->info(" - EGL_CLIENT_APIS: {}", api);
+    stream->info("  EGL_VERSION: {}", version);
+    stream->info("  EGL_VENDOR: \"{}\"", vendor);
+    stream->info("  EGL_CLIENT_APIS: {}", api);
     if (const auto txt = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS)) {
-        stream->info(" - EGL_EXTENSIONS:");
+        stream->info("  EGL_EXTENSIONS:");
         const auto txtlen = strlen(txt);
         auto offset = 0;
         for (auto i = 0u; i < txtlen; ++i) {
@@ -53,14 +56,13 @@ void print_egl_info(EGLDisplay display, EGLContext context) {
         }
     }
 }
+
 TEST_CASE("without window/display", "[egl]") {
     auto stream = get_current_stream();
 
     SECTION("manual construction") {
         EGLNativeWindowType native_window{};
-        EGLNativeDisplayType native_display = EGL_DEFAULT_DISPLAY;
-
-        const EGLDisplay display = eglGetDisplay(native_display);
+        const EGLDisplay display = eglGetDisplay(static_cast<EGLNativeDisplayType>(EGL_DEFAULT_DISPLAY));
         REQUIRE(eglGetError() == EGL_SUCCESS);
 
         EGLint major = 0, minor = 0;
@@ -90,34 +92,34 @@ TEST_CASE("without window/display", "[egl]") {
         egl_helper_t egl{EGL_DEFAULT_DISPLAY};
 
         stream->info("OpenGL(EGL_DEFAULT_DISPLAY):");
-        stream->info(" - GL_VERSION: {:s}", glGetString(GL_VERSION));
-        stream->info(" - GL_VENDOR: {:s}", glGetString(GL_VENDOR));
-        stream->info(" - GL_RENDERER: {:s}", glGetString(GL_RENDERER));
-        stream->info(" - GL_SHADING_LANGUAGE_VERSION: {:s}", glGetString(GL_SHADING_LANGUAGE_VERSION));
+        stream->info("  GL_VERSION: {:s}", glGetString(GL_VERSION));
+        stream->info("  GL_VENDOR: {:s}", glGetString(GL_VENDOR));
+        stream->info("  GL_RENDERER: {:s}", glGetString(GL_RENDERER));
+        stream->info("  GL_SHADING_LANGUAGE_VERSION: {:s}", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
         // see https://www.khronos.org/registry/OpenGL/extensions/
         GLint count = 0;
         glGetIntegerv(GL_NUM_EXTENSIONS, &count);
         if (count > 0)
-            stream->info(" - GL_EXTENSIONS:");
+            stream->info("  GL_EXTENSIONS:");
         for (auto i = 0; i < count; ++i)
             stream->info("   - {:s}", glGetStringi(GL_EXTENSIONS, i));
 
         GLint value = 0;
         glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &value);
-        stream->info(" - GL_MAX_UNIFORM_BLOCK_SIZE: {}", value);
+        stream->info("  GL_MAX_UNIFORM_BLOCK_SIZE: {}", value);
         glGetIntegerv(GL_MAX_TEXTURE_SIZE, &value);
-        stream->info(" - GL_MAX_TEXTURE_BUFFER_SIZE: {}", value);
+        stream->info("  GL_MAX_TEXTURE_BUFFER_SIZE: {}", value);
         glGetIntegerv(GL_MAX_RENDERBUFFER_SIZE, &value);
-        stream->info(" - GL_MAX_RENDERBUFFER_SIZE: {}", value);
+        stream->info("  GL_MAX_RENDERBUFFER_SIZE: {}", value);
 
         glGetIntegerv(GL_MAX_SAMPLES, &value);
-        stream->info(" - GL_MAX_SAMPLES: {}", value);
+        stream->info("  GL_MAX_SAMPLES: {}", value);
         glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &value);
-        stream->info(" - GL_MAX_COLOR_ATTACHMENTS: {}", value);
+        stream->info("  GL_MAX_COLOR_ATTACHMENTS: {}", value);
 #if defined(GL_MAX_COMPUTE_WORK_GROUP_SIZE)
         glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_SIZE, &value);
-        stream->info(" - GL_MAX_COMPUTE_WORK_GROUP_SIZE: {}", value);
+        stream->info("  GL_MAX_COMPUTE_WORK_GROUP_SIZE: {}", value);
 #endif
     }
 

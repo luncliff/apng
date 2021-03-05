@@ -30,7 +30,6 @@ find_package(Threads    REQUIRED)
 find_package(Microsoft.GSL CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
-find_package(glm    CONFIG REQUIRED)
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
 find_package(directxtk CONFIG REQUIRED)
 

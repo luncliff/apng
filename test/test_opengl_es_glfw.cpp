@@ -216,12 +216,8 @@ auto create_opengl_window(gsl::czstring<> window_name) noexcept -> std::unique_p
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2); // ES 2.0
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 #elif defined(GLFW_INCLUDE_ES3)
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // ES 3.0 ~ 3.1
-#if defined(GL_ES_VERSION_3_1)
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-#elif defined(GL_ES_VERSION_3_0)
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // ES 3.0+
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-#endif
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE); // ANGLE supports EGL_KHR_debug
 #endif
 #endif // defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
