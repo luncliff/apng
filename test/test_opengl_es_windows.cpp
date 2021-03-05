@@ -3,15 +3,14 @@
  * @see https://github.com/google/angle/blob/master/util/windows/win32/Win32Window.cpp 
  */
 #include <catch2/catch.hpp>
-#include <cwchar>
 #include <spdlog/spdlog.h>
 
 // clang-format off
 #include <opengl_1.h>
 #include <EGL/eglext_angle.h>
 
-#include <comdef.h>
-#include <wrl/client.h>
+#include <winrt/Windows.Foundation.h>
+
 #include <d3d11.h>
 #include <d3d11_1.h>
 #include <d3dcompiler.h>
@@ -20,11 +19,10 @@
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "dxguid.lib")
-#pragma comment(lib, "comctl32")
 // clang-format on
 
 using namespace std;
-using namespace Microsoft::WRL;
+using winrt::com_ptr;
 
 auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger>;
 

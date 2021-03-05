@@ -9,12 +9,15 @@
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <gsl/gsl>
-#if defined(_WIN32)
-#include <winrt/Windows.Foundation.h>
-#endif
+
+#include <pplawait.h>
+#include <ppltasks.h>
+#include <winrt/Windows.Foundation.h> // namespace winrt::Windows::Foundation
+#include <winrt/Windows.System.h>     // namespace winrt::Windows::System
 
 namespace fs = std::filesystem;
 using namespace std;
+using winrt::com_ptr;
 
 fs::path get_asset_dir() noexcept;
 auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger>;
@@ -74,10 +77,10 @@ TEST_CASE("Vulkan Instance Extenstions", "[extension]") {
 
 fs::path get_asset_dir() noexcept {
 #if defined(ASSET_DIR)
-    return {ASSET_DIR};
-#else
-    return fs::current_path();
+    if (fs::exists(ASSET_DIR))
+        return {ASSET_DIR};
 #endif
+    return fs::current_path();
 }
 
 auto stream = spdlog::stdout_color_st("test");
@@ -91,9 +94,7 @@ auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger> {
 
 int main(int argc, char* argv[]) {
     setlocale(LC_ALL, ".65001");
-#if defined(_WIN32)
     winrt::init_apartment();
     auto on_exit = gsl::finally(&winrt::uninit_apartment);
-#endif
     return Catch::Session().run(argc, argv);
 }

@@ -5,9 +5,10 @@ if(NOT CMAKE_TOOLCHAIN_FILE MATCHES vcpkg.cmake)
     message(FATAL_ERROR "requires vcpkg.cmake for CMAKE_TOOLCHAIN_FILE")
 endif()
 message(STATUS "using vcpkg: ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
-# vcpkg install --triplet x64-windows angle directxtk
 
 set(CMAKE_VS_WINRT_BY_DEFAULT true)
+# see https://developer.microsoft.com/en-us/windows/downloads/sdk-archive/
+set(CMAKE_VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17763.0")
 
 add_library(graphics SHARED
     src/main.cpp
@@ -22,150 +23,81 @@ add_library(graphics SHARED
 set_target_properties(graphics
 PROPERTIES
     CXX_STANDARD 17
-    VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17134.0"
     WINDOWS_EXPORT_ALL_SYMBOLS  true
 )
 
+find_package(Threads    REQUIRED)
+find_package(Microsoft.GSL CONFIG REQUIRED)
+find_package(Vulkan REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+find_package(glm    CONFIG REQUIRED)
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
+find_package(directxtk CONFIG REQUIRED)
+
 target_include_directories(graphics
 PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
-    $<BUILD_INTERFACE:${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include>
 PRIVATE
-    ${TINYGLTF_INCLUDE_DIRS}
     externals/include
 )
-if(CMAKE_BUILD_TYPE MATCHES Debug)
-    target_link_directories(graphics
-    PUBLIC
-        $<BUILD_INTERFACE:${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/debug/lib>
-    )
-else()
-    target_link_directories(graphics
-    PUBLIC
-        $<BUILD_INTERFACE:${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib>
-    )
-endif()
 
-find_package(Threads    REQUIRED)
-find_package(Vulkan     REQUIRED)
-find_package(spdlog     CONFIG REQUIRED)
-find_package(glm        CONFIG REQUIRED)
+# if(CMAKE_BUILD_TYPE MATCHES Debug)
+#     target_link_directories(graphics
+#     PUBLIC
+#         $<BUILD_INTERFACE:${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/debug/lib>
+#     )
+# else()
+#     target_link_directories(graphics
+#     PUBLIC
+#         $<BUILD_INTERFACE:${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib>
+#     )
+# endif()
+
 target_link_libraries(graphics
 PUBLIC
-    Threads::Threads 
-    glm Vulkan::Vulkan spdlog::spdlog
+    Threads::Threads Microsoft.GSL::GSL Vulkan::Vulkan spdlog::spdlog
+    Microsoft::DirectXTK
+    windowsapp windowscodecs
 )
 
-if(CMAKE_CXX_COMPILER_ID MATCHES Clang)
-    if(WIN32)
-        target_compile_options(graphics
-        PUBLIC
-            /std:c++17
-        PRIVATE
-            /W4
-        )
+target_link_options(graphics
+PRIVATE
+    /ERRORREPORT:SEND
+    # /APPCONTAINER # for UWP
+)
 
-    else()
-        target_compile_options(graphics
-        PUBLIC
-            -std=c++20 -stdlib=libc++
-        PRIVATE
-            -Wall -Wextra
-        )
+target_compile_options(graphics
+PUBLIC
+    /std:c++17 /Zc:__cplusplus
+PRIVATE
+    /W4 /bigobj /await /errorReport:send
+)
 
-    endif()
-
-elseif(CMAKE_CXX_COMPILER_ID MATCHES GNU)
-    target_compile_options(graphics
-    PUBLIC
-        -std=gnu++20
-    PRIVATE
-        -Wall -Wextra
-    )
-    target_link_libraries(graphics
-    PUBLIC
-        stdc++
-    )
-
-elseif(MSVC)
-    target_compile_options(graphics
-    PUBLIC
-        /std:c++17 /Zc:__cplusplus
-    PRIVATE
-        /W4 /bigobj /await /permissive-
-    )
-endif()
-
-if(WIN32)
-    target_compile_definitions(graphics
-    PUBLIC
-        WIN32_LEAN_AND_MEAN NOMINMAX
-    )
-    target_link_libraries(graphics
-    PUBLIC
-        windowsapp windowscodecs DirectXTK
-    )
-
-elseif(CMAKE_SYSTEM_NAME MATCHES Linux)
-    target_link_libraries(graphics
-    PUBLIC
-        stdc++ m
-    )
-
-elseif(APPLE OR UNIX)
-    target_link_libraries(graphics
-    PUBLIC
-        c++
-    )
-
-endif()
+target_compile_definitions(graphics
+PUBLIC
+    WIN32_LEAN_AND_MEAN NOMINMAX
+)
 
 if(DEFINED Qt5_DIR)
-    # Anaconda Qt 5.9 - "C:\\Users\\luncl\\Anaconda3\\Library\\lib\\cmake\\Qt5"
-    # Qt 5.12 - "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2017_64"
-    find_package(Qt5 REQUIRED
-    COMPONENTS
-        Core Widgets OpenGL
-    )
-    get_filename_component(angle_path           ${Qt5_DIR} DIRECTORY ) # msvc2017_64/lib/cmake/
-    get_filename_component(angle_lib_dir        ${angle_path} DIRECTORY ) # msvc2017_64/lib/
-    get_filename_component(angle_path           ${angle_lib_dir} DIRECTORY ) # msvc2017_64/
-    if(Qt5_DIR MATCHES Anaconda3)
-        # Anaconda Qt 5.9 has a different include dir
-        # EGL 1.4 + OpenGL ES 3.0
-        get_filename_component(angle_include_dir    ${angle_path}/include/qt/QtANGLE ABSOLUTE)
-    else()
-        # Qt 5.12
-        # EGL 1.4 + OpenGL ES 3.1
-        get_filename_component(angle_include_dir    ${angle_path}/include/QtANGLE ABSOLUTE)
-    endif()
-    unset(angle_path)
-    message(STATUS "using QtANGLE:")
-    message(STATUS " - ${angle_include_dir}")
-    message(STATUS " - ${angle_lib_dir}")
+    list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+    find_package(QtANGLE REQUIRED)
 
-    target_include_directories(graphics
-    PUBLIC
-        ${angle_include_dir}
-    )
-    target_link_directories(graphics
-    PUBLIC
-        ${angle_lib_dir}
-    )
     target_link_libraries(graphics
     PUBLIC
-        libEGL libGLESv2
+        Qt5::libEGL Qt5::libGLESv2
     )
+    file(COPY ${QtANGLE_EGL_LOCATION} ${QtANGLE_GLES_LOCATION}
+         DESTINATION ${CMAKE_BINARY_DIR}
+    )
+
 else()
-    message(STATUS "using unofficial-angle")
     find_package(unofficial-angle CONFIG REQUIRED)
     target_link_libraries(graphics
     PUBLIC
         unofficial::angle::libEGL unofficial::angle::libGLESv2 
     )
-endif()
 
+endif()
 
 find_package(glslang CONFIG REQUIRED)
 find_program(glslc_path
@@ -190,17 +122,15 @@ find_package(Catch2 CONFIG REQUIRED)
 
 add_executable(graphics_test_suite
     test/test_main.cpp
-    test/test_vulkan_device.cpp
-    test/test_vulkan_surface_glfw.cpp
-    test/test_vulkan_pipeline.cpp
-    test/test_vulkan_descriptor_set.cpp
+    # test/test_vulkan_device.cpp
+    # test/test_vulkan_surface_glfw.cpp
+    # test/test_vulkan_pipeline.cpp
+    # test/test_vulkan_descriptor_set.cpp
     test/test_opengl_es_windows.cpp
     test/test_opengl_es_glfw.cpp
     test/test_directx.cpp
 )
-add_dependencies(graphics_test_suite
-    compile_shaders_glsl
-)
+add_dependencies(graphics_test_suite compile_shaders_glsl)
 
 set_target_properties(graphics_test_suite
 PROPERTIES

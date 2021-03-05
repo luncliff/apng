@@ -9,9 +9,10 @@
 #include <opengl_1.h>
 #include <EGL/eglext_angle.h>
 
-#include <comdef.h>
-#include <wrl/client.h>
-#pragma comment(lib, "comctl32")
+#include <pplawait.h>
+#include <ppltasks.h>
+#include <winrt/Windows.Foundation.h> // namespace winrt::Windows::Foundation
+#include <winrt/Windows.System.h>     // namespace winrt::Windows::System
 
 #include <wincodecsdk.h>
 #include <DirectXTK/WICTextureLoader.h>
@@ -31,14 +32,14 @@
 // clang-format on
 
 using namespace std;
-using namespace Microsoft::WRL;
+using winrt::com_ptr;
 
 auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger>;
 fs::path get_asset_dir() noexcept;
 
 TEST_CASE("D3D9 Device", "[directx]") {
-    ComPtr<IDirect3D9Ex> dxd9{};
-    REQUIRE(Direct3DCreate9Ex(D3D_SDK_VERSION, dxd9.GetAddressOf()) == S_OK);
+    com_ptr<IDirect3D9Ex> dxd9{};
+    REQUIRE(Direct3DCreate9Ex(D3D_SDK_VERSION, dxd9.put()) == S_OK);
     D3DPRESENT_PARAMETERS params{};
     params.BackBufferWidth = 1920;
     params.BackBufferHeight = 1080;
@@ -48,33 +49,33 @@ TEST_CASE("D3D9 Device", "[directx]") {
     params.Windowed = true;
     params.hDeviceWindow = NULL; // HWND
     params.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
-    ComPtr<IDirect3DDevice9> device{};
+    com_ptr<IDirect3DDevice9> device{};
     REQUIRE(dxd9->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, NULL, D3DCREATE_HARDWARE_VERTEXPROCESSING, &params,
-                               device.GetAddressOf()) == S_OK);
+                               device.put()) == S_OK);
     REQUIRE(device);
 }
 
 TEST_CASE("ID3D11Device with feature level", "[directx]") {
-    ComPtr<ID3D11Device> device{};
-    ComPtr<ID3D11DeviceContext> context{};
+    com_ptr<ID3D11Device> device{};
+    com_ptr<ID3D11DeviceContext> context{};
     SECTION("D3D_FEATURE_LEVEL_9_3") {
         D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_9_3;
         REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, nullptr, 0, //
-                                  D3D11_SDK_VERSION, device.GetAddressOf(), &level, context.GetAddressOf()) == S_OK);
+                                  D3D11_SDK_VERSION, device.put(), &level, context.put()) == S_OK);
         REQUIRE(device);
         REQUIRE(device->GetFeatureLevel() == level);
     }
     SECTION("D3D_FEATURE_LEVEL_10_1") {
         D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_10_1;
         REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, nullptr, 0, //
-                                  D3D11_SDK_VERSION, device.GetAddressOf(), &level, context.GetAddressOf()) == S_OK);
+                                  D3D11_SDK_VERSION, device.put(), &level, context.put()) == S_OK);
         REQUIRE(device);
         REQUIRE(device->GetFeatureLevel() == level);
     }
     SECTION("D3D_FEATURE_LEVEL_11_1") {
         D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_1;
         REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, nullptr, 0, //
-                                  D3D11_SDK_VERSION, device.GetAddressOf(), &level, context.GetAddressOf()) == S_OK);
+                                  D3D11_SDK_VERSION, device.put(), &level, context.put()) == S_OK);
         REQUIRE(device);
         REQUIRE(device->GetFeatureLevel() == level);
     }
@@ -157,21 +158,21 @@ SCENARIO("Dx11 Device for ANGLE", "[egl]") {
         reinterpret_cast<PFNEGLRELEASEDEVICEANGLEPROC>(eglGetProcAddress("eglReleaseDeviceANGLE"));
     REQUIRE(releaseDevice);
 
-    ComPtr<IDXGIFactory> factory = nullptr;
-    if (auto hr = CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)factory.GetAddressOf()); FAILED(hr))
-        throw _com_error{hr};
+    com_ptr<IDXGIFactory> factory = nullptr;
+    if (auto hr = CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)factory.put()); FAILED(hr))
+        throw winrt::hresult_error{hr};
     REQUIRE(factory);
 
-    ComPtr<ID3D11Device> handle{};
-    ComPtr<ID3D11DeviceContext> context{};
+    com_ptr<ID3D11Device> handle{};
+    com_ptr<ID3D11DeviceContext> context{};
     GIVEN("D3D_FEATURE_LEVEL_9_3") {
         D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_9_3;
         D3D_FEATURE_LEVEL levels[]{D3D_FEATURE_LEVEL_9_3};
         if (auto hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, levels, 1, //
-                                        D3D11_SDK_VERSION, handle.GetAddressOf(), &level, context.GetAddressOf());
+                                        D3D11_SDK_VERSION, handle.put(), &level, context.put());
             FAILED(hr))
-            throw _com_error{hr};
-        EGLDeviceEXT device = createDevice(EGL_D3D11_DEVICE_ANGLE, handle.Get(), nullptr);
+            throw winrt::hresult_error{hr};
+        EGLDeviceEXT device = createDevice(EGL_D3D11_DEVICE_ANGLE, handle.get(), nullptr);
         REQUIRE(device != EGL_NO_DEVICE_EXT);
         REQUIRE(eglGetError() == EGL_SUCCESS);
         auto on_return = gsl::finally([releaseDevice, device]() { //
@@ -189,11 +190,11 @@ SCENARIO("Dx11 Device for ANGLE", "[egl]") {
         D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_1;
         D3D_FEATURE_LEVEL levels[]{D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0};
         if (auto hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, levels, 2, //
-                                        D3D11_SDK_VERSION, handle.GetAddressOf(), &level, context.GetAddressOf());
+                                        D3D11_SDK_VERSION, handle.put(), &level, context.put());
             FAILED(hr))
-            throw _com_error{hr};
+            throw winrt::hresult_error{hr};
 
-        EGLDeviceEXT device = createDevice(EGL_D3D11_DEVICE_ANGLE, handle.Get(), nullptr);
+        EGLDeviceEXT device = createDevice(EGL_D3D11_DEVICE_ANGLE, handle.get(), nullptr);
         REQUIRE(device != EGL_NO_DEVICE_EXT);
         REQUIRE(eglGetError() == EGL_SUCCESS);
         auto on_return = gsl::finally([releaseDevice, device]() { //
@@ -209,16 +210,16 @@ SCENARIO("Dx11 Device for ANGLE", "[egl]") {
 // see https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_usage#resource-usage-restrictions
 // see https://docs.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11device-createtexture2d#remarks
 TEST_CASE("ID3D11Texture2D(D3D11_USAGE_DYNAMIC)", "[directx][texture]") {
-    ComPtr<ID3D11Device> device{};
-    ComPtr<ID3D11DeviceContext> context{};
+    com_ptr<ID3D11Device> device{};
+    com_ptr<ID3D11DeviceContext> context{};
     D3D_FEATURE_LEVEL level{};
     D3D_FEATURE_LEVEL levels[]{D3D_FEATURE_LEVEL_11_1};
     if (auto hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, levels, 1, //
-                                    D3D11_SDK_VERSION, device.GetAddressOf(), &level, context.GetAddressOf());
+                                    D3D11_SDK_VERSION, device.put(), &level, context.put());
         FAILED(hr))
-        throw _com_error{hr};
+        throw winrt::hresult_error{hr};
 
-    ComPtr<ID3D11Texture2D> texture{};
+    com_ptr<ID3D11Texture2D> texture{};
     D3D11_TEXTURE2D_DESC desc{};
     desc.Width = desc.Height = 500;
     desc.MipLevels = desc.ArraySize = 1;
@@ -229,25 +230,25 @@ TEST_CASE("ID3D11Texture2D(D3D11_USAGE_DYNAMIC)", "[directx][texture]") {
     desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     SECTION("DXGI_FORMAT_R8G8B8A8_UNORM") {
         desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        if (auto hr = device->CreateTexture2D(&desc, nullptr, texture.GetAddressOf()))
-            throw _com_error{hr};
+        if (auto hr = device->CreateTexture2D(&desc, nullptr, texture.put()))
+            throw winrt::hresult_error{hr};
     }
     SECTION("DXGI_FORMAT_NV12") {
         desc.Format = DXGI_FORMAT_NV12;
-        if (auto hr = device->CreateTexture2D(&desc, nullptr, texture.GetAddressOf()))
-            throw _com_error{hr};
+        if (auto hr = device->CreateTexture2D(&desc, nullptr, texture.put()))
+            throw winrt::hresult_error{hr};
     }
     SECTION("DXGI_FORMAT_YUY2") {
         desc.Format = DXGI_FORMAT_YUY2;
-        if (auto hr = device->CreateTexture2D(&desc, nullptr, texture.GetAddressOf()))
-            throw _com_error{hr};
+        if (auto hr = device->CreateTexture2D(&desc, nullptr, texture.put()))
+            throw winrt::hresult_error{hr};
     }
     REQUIRE(texture);
 
     // see https://docs.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-map
     D3D11_MAPPED_SUBRESOURCE mapping{};
-    if (auto hr = context->Map(texture.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapping))
-        throw _com_error{hr};
+    if (auto hr = context->Map(texture.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapping))
+        throw winrt::hresult_error{hr};
     CAPTURE(mapping.DepthPitch);
     REQUIRE(mapping.pData);
     switch (desc.Format) {
@@ -261,24 +262,24 @@ TEST_CASE("ID3D11Texture2D(D3D11_USAGE_DYNAMIC)", "[directx][texture]") {
         REQUIRE(mapping.RowPitch == 512 * 2);
         break;
     }
-    context->Unmap(texture.Get(), 0);
+    context->Unmap(texture.get(), 0);
 }
 
 SCENARIO("IWICImagingFactor", "[windows]") {
-    ComPtr<IWICImagingFactory> factory{};
+    com_ptr<IWICImagingFactory> factory{};
     REQUIRE(CoCreateInstance(CLSID_WICImagingFactory, NULL, //
-                             CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.GetAddressOf())) == S_OK);
+                             CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.put())) == S_OK);
 
     GIVEN("image/png") {
         const auto fpath = get_asset_dir() / "image_1080_608.png";
         REQUIRE(fs::exists(fpath));
 
         WHEN("IWICBitmapDecoder") {
-            ComPtr<IWICBitmapDecoder> decoder = nullptr;
+            com_ptr<IWICBitmapDecoder> decoder = nullptr;
             REQUIRE(factory->CreateDecoderFromFilename(fpath.c_str(), nullptr, GENERIC_READ, //
-                                                       WICDecodeMetadataCacheOnDemand, decoder.GetAddressOf()) == S_OK);
-            ComPtr<IWICBitmapFrameDecode> source = nullptr;
-            REQUIRE(decoder->GetFrame(0, source.GetAddressOf()) == S_OK);
+                                                       WICDecodeMetadataCacheOnDemand, decoder.put()) == S_OK);
+            com_ptr<IWICBitmapFrameDecode> source = nullptr;
+            REQUIRE(decoder->GetFrame(0, source.put()) == S_OK);
             WICRect rect{};
             REQUIRE(source->GetSize(reinterpret_cast<UINT*>(&rect.Width), reinterpret_cast<UINT*>(&rect.Height)) ==
                     S_OK);
@@ -287,24 +288,23 @@ SCENARIO("IWICImagingFactor", "[windows]") {
             // @todo source->CopyPixels(...);
         }
         WHEN("CreateWICTextureFromFile") {
-            ComPtr<ID3D11Device> device{};
-            ComPtr<ID3D11DeviceContext> context{};
+            com_ptr<ID3D11Device> device{};
+            com_ptr<ID3D11DeviceContext> context{};
             D3D_FEATURE_LEVEL level{};
             D3D_FEATURE_LEVEL levels[]{D3D_FEATURE_LEVEL_11_1};
             if (auto hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, levels, 1, //
-                                            D3D11_SDK_VERSION, device.GetAddressOf(), &level, context.GetAddressOf());
+                                            D3D11_SDK_VERSION, device.put(), &level, context.put());
                 FAILED(hr))
-                throw _com_error{hr};
-            ComPtr<ID3D11Resource> resource{};
-            ComPtr<ID3D11Texture2D> texture{};
-            ComPtr<ID3D11ShaderResourceView> texture_view{};
-            REQUIRE(DirectX::CreateWICTextureFromFile(device.Get(), context.Get(), //
+                throw winrt::hresult_error{hr};
+            com_ptr<ID3D11Resource> resource{};
+            com_ptr<ID3D11ShaderResourceView> texture_view{};
+            REQUIRE(DirectX::CreateWICTextureFromFile(device.get(), context.get(), //
                                                       fpath.c_str(),               //
-                                                      resource.GetAddressOf(), texture_view.GetAddressOf()) == S_OK);
+                                                      resource.put(), texture_view.put()) == S_OK);
             REQUIRE(resource);
             REQUIRE(texture_view);
-            resource.As(&texture);
-            REQUIRE(texture);
+            com_ptr<ID3D11Texture2D> texture{};
+            REQUIRE(resource->QueryInterface(texture.put()) == S_OK);
 
             D3D11_TEXTURE2D_DESC desc{};
             texture->GetDesc(&desc);
@@ -338,39 +338,39 @@ EGLDisplay make_egl_display(EGLDeviceEXT device) {
 }
 
 /// @see https://docs.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-devices-layers
-void make_device_and_context(ComPtr<ID3D11Device>& device, ComPtr<ID3D11DeviceContext>& context,
+void make_device_and_context(com_ptr<ID3D11Device>& device, com_ptr<ID3D11DeviceContext>& context,
                              D3D_FEATURE_LEVEL& level) {
-    ComPtr<IDXGIFactory> factory = nullptr;
-    if (auto hr = CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)factory.GetAddressOf()))
-        throw _com_error{hr};
+    com_ptr<IDXGIFactory> factory = nullptr;
+    if (auto hr = CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)factory.put()))
+        throw winrt::hresult_error{hr};
 
     IDXGIAdapter* adapter = nullptr;
     for (auto i = 0u; factory->EnumAdapters(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
         DXGI_ADAPTER_DESC info{};
         if (auto hr = adapter->GetDesc(&info); FAILED(hr))
-            throw _com_error{hr};
+            throw winrt::hresult_error{hr};
         wstring_view name{info.Description};
         if (name.find(L"NVIDIA") != std::string::npos)
             break;
     }
     if (auto hr = D3D11CreateDevice(adapter, adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE,          //
                                     NULL, D3D11_CREATE_DEVICE_DEBUG | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
-                                    D3D11_SDK_VERSION, device.GetAddressOf(), &level, context.GetAddressOf()))
-        throw _com_error{hr};
+                                    D3D11_SDK_VERSION, device.put(), &level, context.put()))
+        throw winrt::hresult_error{hr};
 }
 
 /// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLPresentPathD3D11Test.cpp
 SCENARIO("ID3D11Texture2D to EGLImage", "[egl]") {
     auto stream = get_current_stream();
 
-    ComPtr<ID3D11Device> device{};
-    ComPtr<ID3D11DeviceContext> context{};
+    com_ptr<ID3D11Device> device{};
+    com_ptr<ID3D11DeviceContext> context{};
     D3D_FEATURE_LEVEL level{};
     make_device_and_context(device, context, level);
     REQUIRE(device);
     REQUIRE(level >= D3D_FEATURE_LEVEL_9_3);
 
-    ComPtr<ID3D11Texture2D> texture{};
+    com_ptr<ID3D11Texture2D> texture{};
     {
         D3D11_TEXTURE2D_DESC info{};
         info.Width = 960;
@@ -383,7 +383,7 @@ SCENARIO("ID3D11Texture2D to EGLImage", "[egl]") {
         info.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
         info.CPUAccessFlags = 0;
         info.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
-        REQUIRE(device->CreateTexture2D(&info, nullptr, texture.GetAddressOf()) == S_OK);
+        REQUIRE(device->CreateTexture2D(&info, nullptr, texture.put()) == S_OK);
     }
     REQUIRE(texture);
 
@@ -393,7 +393,7 @@ SCENARIO("ID3D11Texture2D to EGLImage", "[egl]") {
     REQUIRE(release_device);
 
     GIVEN("EGLDisplay/EGLDevice") {
-        EGLDeviceEXT es_device = create_device(EGL_D3D11_DEVICE_ANGLE, device.Get(), nullptr);
+        EGLDeviceEXT es_device = create_device(EGL_D3D11_DEVICE_ANGLE, device.get(), nullptr);
         REQUIRE(eglGetError() == EGL_SUCCESS);
         auto on_return_1 = gsl::finally([release_device, es_device]() { release_device(es_device); });
 
@@ -433,8 +433,8 @@ SCENARIO("ID3D11Texture2D to EGLImage", "[egl]") {
         stream->debug("{:s}", glGetString(GL_VERSION));
 
         WHEN("create EGLSurface from shared resource") {
-            ComPtr<IDXGIResource> resource{};
-            REQUIRE(texture.As(&resource) == S_OK);
+            com_ptr<IDXGIResource> resource{};
+            REQUIRE(texture->QueryInterface(resource.put()) == S_OK);
             HANDLE handle{};
             REQUIRE(resource->GetSharedHandle(&handle) == S_OK);
             D3D11_TEXTURE2D_DESC desc{};
