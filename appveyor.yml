@@ -23,7 +23,7 @@ platform:
 
 configuration:
   - Debug
-  # - Release
+  - Release
 
 # $env:Qt5_DIR makes the project configures with QtANGLE
 environment:
