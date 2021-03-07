@@ -25,6 +25,7 @@ configuration:
   - Debug
   # - Release
 
+# $env:Qt5_DIR makes the project configures with QtANGLE
 environment:
   global:
     install_path: C:/install
@@ -60,8 +61,7 @@ before_build:
         -DCMAKE_BUILD_TYPE="$env:CONFIGURATION" `
         -DCMAKE_INSTALL_PREFIX="$env:INSTALL_PATH" `
         -DCMAKE_TOOLCHAIN_FILE="C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET="$env:VCPKG_TARGET_TRIPLET" `
-        -DVCPKG_TARGET_TRIPLET="$env:VCPKG_TARGET_TRIPLET" `
-        -DQt5_DIR="$env:Qt5_DIR"
+        -DVCPKG_TARGET_TRIPLET="$env:VCPKG_TARGET_TRIPLET"
 
 build:
   project: graphics.sln
