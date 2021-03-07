@@ -33,6 +33,7 @@ environment:
       Qt5_DIR: "C:/Qt/5.15/msvc2019_64/lib/cmake/Qt5"
     - image: Visual Studio 2017
       Qt5_DIR: "C:/Qt/5.12/msvc2017_64/lib/cmake/Qt5"
+    - image: Visual Studio 2019
 
 cache:
   - C:/tools/vcpkg/installed
@@ -44,6 +45,10 @@ install:
   - ps: |
       vcpkg install --triplet $env:VCPKG_TARGET_TRIPLET `
         ms-gsl spdlog catch2 glfw3 tinygltf directxtex directxtk glslang glm
+  - ps: |
+      if( "$env:Qt5_DIR" -eq "" ){ vcpkg install --triplet $env:VCPKG_TARGET_TRIPLET `
+        angle `
+      }
   - ps: vcpkg list
 
 before_build:
@@ -65,4 +70,4 @@ build:
 test_script:
   # - ps: if($env:CONFIGURATION -eq "Debug"){   $env:PATH="$env:PATH;c:/tools/vcpkg/installed/$env:VCPKG_TARGET_TRIPLET/debug/bin" }
   # - ps: if($env:CONFIGURATION -eq "Release"){ $env:PATH="$env:PATH;c:/tools/vcpkg/installed/$env:VCPKG_TARGET_TRIPLET/bin" }
-  - ps: ctest --verbose
+  - ps: ctest --verbose -C "$env:CONFIGURATION"
