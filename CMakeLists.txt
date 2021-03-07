@@ -30,7 +30,7 @@ find_package(Vulkan)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Microsoft.GSL CONFIG REQUIRED)
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
-# find_package(directxtk CONFIG REQUIRED) # directxtex directxtk glslang 
+# find_package(directxtk CONFIG REQUIRED)
 
 target_include_directories(graphics
 PUBLIC
