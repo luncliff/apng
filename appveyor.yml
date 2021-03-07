@@ -43,7 +43,7 @@ install:
   - ps: if($env:PLATFORM -eq "x86"){ $env:VCPKG_TARGET_TRIPLET="x86-windows" }
   - ps: |
       vcpkg install --triplet $env:VCPKG_TARGET_TRIPLET `
-        ms-gsl spdlog catch2 glfw3 tinygltf directxtex directxtk glslang glm vulkan
+        ms-gsl spdlog catch2 glfw3 tinygltf directxtex directxtk glslang glm
   - ps: vcpkg list
 
 before_build:
