@@ -8,9 +8,9 @@ message(STATUS "using vcpkg: ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
 
 set(CMAKE_VS_WINRT_BY_DEFAULT true)
 # see https://developer.microsoft.com/en-us/windows/downloads/sdk-archive/
-set(CMAKE_VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17763.0")
+# set(CMAKE_VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17763.0")
 
-add_library(graphics SHARED
+add_library(graphics
     src/main.cpp
     # src/vulkan.cpp
     # src/vulkan_1.h
@@ -30,7 +30,7 @@ find_package(Vulkan)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Microsoft.GSL CONFIG REQUIRED)
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
-find_package(directxtk CONFIG REQUIRED)
+# find_package(directxtk CONFIG REQUIRED) # directxtex directxtk glslang 
 
 target_include_directories(graphics
 PUBLIC
@@ -54,7 +54,8 @@ PRIVATE
 target_link_libraries(graphics
 PUBLIC
     Microsoft.GSL::GSL spdlog::spdlog
-    Microsoft::DirectXTK windowsapp windowscodecs
+    windowsapp windowscodecs
+    # Microsoft::DirectXTK 
 )
 if(Vulkan_FOUND)
     target_link_libraries(graphics
@@ -102,22 +103,22 @@ else()
 
 endif()
 
-find_package(glslang CONFIG REQUIRED)
-find_program(glslc_path
-    NAMES   glslc.exe glslc
-    PATHS   ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools
-    # NO_DEFAULT_PATH 
-)
-file(RELATIVE_PATH short_path ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET} ${glslc_path})
-message(STATUS "using glslc: ${glslc_path}")
-add_custom_target(compile_shaders_glsl
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/assets
-    COMMAND     ${glslc_path} --version
-    COMMAND     ${glslc_path} sample.vert -o sample_vert.spv
-    COMMAND     ${glslc_path} bypass.frag -o sample_frag.spv
-    COMMAND     ${glslc_path} bypass.frag         -o bypass_frag.spv
-    COMMAND     ${glslc_path} sample_uniform.vert -o sample_uniform_vert.spv
-)
+# find_package(glslang CONFIG REQUIRED)
+# find_program(glslc_path
+#     NAMES   glslc.exe glslc
+#     PATHS   ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools
+#     # NO_DEFAULT_PATH 
+# )
+# file(RELATIVE_PATH short_path ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET} ${glslc_path})
+# message(STATUS "using glslc: ${glslc_path}")
+# add_custom_target(compile_shaders_glsl
+#     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/assets
+#     COMMAND     ${glslc_path} --version
+#     COMMAND     ${glslc_path} sample.vert -o sample_vert.spv
+#     COMMAND     ${glslc_path} bypass.frag -o sample_frag.spv
+#     COMMAND     ${glslc_path} bypass.frag         -o bypass_frag.spv
+#     COMMAND     ${glslc_path} sample_uniform.vert -o sample_uniform_vert.spv
+# )
 
 enable_testing()
 find_package(glfw3 3.3 CONFIG REQUIRED)
@@ -133,7 +134,7 @@ add_executable(graphics_test_suite
     # test/test_opengl_es_glfw.cpp
     # test/test_directx.cpp
 )
-add_dependencies(graphics_test_suite compile_shaders_glsl)
+# add_dependencies(graphics_test_suite compile_shaders_glsl)
 
 set_target_properties(graphics_test_suite
 PROPERTIES
@@ -162,7 +163,5 @@ PRIVATE
 
 # add_test(NAME test_vulkan COMMAND graphics_test_suite "[vulkan]")
 # add_test(NAME test_opengl COMMAND graphics_test_suite "[opengl]")
-if(WIN32)
 # add_test(NAME test_opengl_es COMMAND graphics_test_suite "[egl]")
 add_test(NAME test_windows  COMMAND graphics_test_suite "[windows]")
-endif()
