@@ -1,0 +1,54 @@
+
+version: 1.0.{build}
+
+notifications:
+  - provider: Email
+    to:
+      - luncliff@gmail.com
+
+branches:
+  except:
+    - gh-pages
+    - docs
+
+shallow_clone: true
+clone_depth: 1
+
+image:
+  - Visual Studio 2019
+
+platform:
+  - x64
+  # - x86
+
+configuration:
+  - Debug
+  - Release
+
+environment:
+  global:
+    install_path: C:/install
+  matrix:
+    - image: Visual Studio 2019
+      Qt5_DIR: "C:/Qt/6.0/msvc2019_64/lib/cmake/Qt5"
+    - image: Visual Studio 2019
+      Qt5_DIR: "C:/Qt/5.15/msvc2019_64/lib/cmake/Qt5"
+    - image: Visual Studio 2017
+      Qt5_DIR: "C:/Qt/5.12/msvc2017_64/lib/cmake/Qt5"
+
+install:
+  - ps: if($env:PLATFORM -eq "x64"){ $env:VCPKG_TARGET_TRIPLET="x64-windows" }
+  - ps: if($env:PLATFORM -eq "x86"){ $env:VCPKG_TARGET_TRIPLET="x86-windows" }
+  - ps: vcpkg install --triplet $env:VCPKG_TARGET_TRIPLET ms-gsl spdlog catch2 directxtk glslang glfw3 tinygltf
+  - ps: vcpkg list
+
+before_build:
+  - ps: New-Item -Name "install" -Type Directory
+  - ps: cmake -G $env:APPVEYOR_BUILD_WORKER_IMAGE -DCMAKE_BUILD_TYPE="$env:CONFIGURATION" -DCMAKE_INSTALL_PREFIX="$(pwd)/install" -DCMAKE_TOOLCHAIN_FILE="C:\tools\vcpkg\scripts\buildsystems\vcpkg.cmake" -DQt5_DIR="$env:Qt5_DIR"
+
+build:
+  project: graphics.sln
+  verbosity: minimal
+
+test_script:
+  - ps: ctest --verbose

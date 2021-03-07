@@ -12,9 +12,9 @@ set(CMAKE_VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17763.0")
 
 add_library(graphics SHARED
     src/main.cpp
-    src/vulkan.cpp
-    src/vulkan_1.h
-    src/vulkan_1.cpp
+    # src/vulkan.cpp
+    # src/vulkan_1.h
+    # src/vulkan_1.cpp
     src/opengl_1.h
     src/opengl.cpp
     src/opengl_es.cpp
@@ -26,9 +26,8 @@ PROPERTIES
     WINDOWS_EXPORT_ALL_SYMBOLS  true
 )
 
+find_package(Vulkan)
 find_package(Threads    REQUIRED)
-find_package(Microsoft.GSL CONFIG REQUIRED)
-find_package(Vulkan REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
 find_package(directxtk CONFIG REQUIRED)
@@ -54,10 +53,16 @@ PRIVATE
 
 target_link_libraries(graphics
 PUBLIC
-    Threads::Threads Microsoft.GSL::GSL Vulkan::Vulkan spdlog::spdlog
+    Threads::Threads Microsoft.GSL::GSL spdlog::spdlog
     Microsoft::DirectXTK
     windowsapp windowscodecs
 )
+if(Vulkan_FOUND)
+    target_link_libraries(graphics
+    PUBLIC
+        Vulkan::Vulkan
+    )
+endif()
 
 target_link_options(graphics
 PRIVATE
@@ -125,9 +130,9 @@ add_executable(graphics_test_suite
     # test/test_vulkan_surface_glfw.cpp
     # test/test_vulkan_pipeline.cpp
     # test/test_vulkan_descriptor_set.cpp
-    test/test_opengl_es_windows.cpp
-    test/test_opengl_es_glfw.cpp
-    test/test_directx.cpp
+    # test/test_opengl_es_windows.cpp
+    # test/test_opengl_es_glfw.cpp
+    # test/test_directx.cpp
 )
 add_dependencies(graphics_test_suite compile_shaders_glsl)
 
@@ -146,26 +151,19 @@ PUBLIC
     graphics glfw Catch2::Catch2
 )
 
-if(MSVC)
-    target_compile_options(graphics_test_suite
-    PRIVATE
-        /wd4477 /utf-8
-    )
-else()
-    target_compile_options(graphics_test_suite
-    PRIVATE
-        -Wno-format
-    )
-endif()
+target_compile_options(graphics_test_suite
+PRIVATE
+    /wd4477 /utf-8
+)
 
 target_compile_definitions(graphics_test_suite
 PRIVATE
     ASSET_DIR="${PROJECT_SOURCE_DIR}/assets"
 )
 
-add_test(NAME test_vulkan COMMAND graphics_test_suite "[vulkan]")
-add_test(NAME test_opengl COMMAND graphics_test_suite "[opengl]")
+# add_test(NAME test_vulkan COMMAND graphics_test_suite "[vulkan]")
+# add_test(NAME test_opengl COMMAND graphics_test_suite "[opengl]")
 if(WIN32)
-add_test(NAME test_opengl_es COMMAND graphics_test_suite "[egl]")
+# add_test(NAME test_opengl_es COMMAND graphics_test_suite "[egl]")
 add_test(NAME test_windows  COMMAND graphics_test_suite "[windows]")
 endif()
