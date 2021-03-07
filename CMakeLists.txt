@@ -27,8 +27,8 @@ PROPERTIES
 )
 
 find_package(Vulkan)
-find_package(Threads    REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(Microsoft.GSL CONFIG REQUIRED)
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
 find_package(directxtk CONFIG REQUIRED)
 
@@ -53,9 +53,8 @@ PRIVATE
 
 target_link_libraries(graphics
 PUBLIC
-    Threads::Threads Microsoft.GSL::GSL spdlog::spdlog
-    Microsoft::DirectXTK
-    windowsapp windowscodecs
+    Microsoft.GSL::GSL spdlog::spdlog
+    Microsoft::DirectXTK windowsapp windowscodecs
 )
 if(Vulkan_FOUND)
     target_link_libraries(graphics
