@@ -5,8 +5,7 @@
 #define SPDLOG_HEADER_ONLY
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+
 #include <filesystem>
 #include <gsl/gsl>
 
@@ -40,5 +39,6 @@ int main(int argc, char* argv[]) {
     setlocale(LC_ALL, ".65001");
     winrt::init_apartment();
     auto on_exit = gsl::finally(&winrt::uninit_apartment);
-    return Catch::Session().run(argc, argv);
+    Catch::Session session{};
+    return session.run(argc, argv);
 }
