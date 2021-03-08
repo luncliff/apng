@@ -2,6 +2,7 @@
 //#define CATCH_CONFIG_WINDOWS_CRTDBG
 #define CATCH_CONFIG_RUNNER
 #include <catch2/catch.hpp>
+#include <catch2/catch_reporter_sonarqube.hpp>
 #define SPDLOG_HEADER_ONLY
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
@@ -29,10 +30,9 @@ fs::path get_asset_dir() noexcept {
 int main(int argc, char* argv[]) {
     setlocale(LC_ALL, ".65001");
 
-    using namespace spdlog::level;
     auto stream = spdlog::stdout_color_st("test");
-    stream->set_pattern("%v");
-    stream->set_level(level_enum::trace);
+    stream->set_pattern("[%^%l%$] %v");
+    stream->set_level(spdlog::level::level_enum::trace);
     spdlog::set_default_logger(stream);
 
     winrt::init_apartment();

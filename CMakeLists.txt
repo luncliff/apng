@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.13)
 project(graphics VERSION 1.0 LANGUAGES CXX)
 
 if(NOT CMAKE_TOOLCHAIN_FILE MATCHES vcpkg.cmake)
-    message(FATAL_ERROR "requires vcpkg.cmake for CMAKE_TOOLCHAIN_FILE")
+    message(FATAL_ERROR "Requires vcpkg.cmake for CMAKE_TOOLCHAIN_FILE")
 endif()
-message(STATUS "using vcpkg: ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+message(STATUS "Using vcpkg: ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
 
 set(CMAKE_VS_WINRT_BY_DEFAULT true)
 # see https://developer.microsoft.com/en-us/windows/downloads/sdk-archive/
@@ -85,7 +85,7 @@ PUBLIC
     WIN32_LEAN_AND_MEAN NOMINMAX
 )
 
-if(DEFINED ENV{Qt5_DIR})
+if(DEFINED ENV{Qt5_DIR} OR DEFINED Qt5_DIR)
     list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
     find_package(QtANGLE REQUIRED)
 
@@ -94,8 +94,9 @@ if(DEFINED ENV{Qt5_DIR})
         Qt5::libEGL Qt5::libGLESv2
     )
     file(COPY ${QtANGLE_EGL_LOCATION} ${QtANGLE_GLES_LOCATION}
-         DESTINATION ${CMAKE_BINARY_DIR}
+         DESTINATION ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}
     )
+    message(STATUS "Copied QtANGLE: ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}")
 
 else()
     find_package(unofficial-angle CONFIG REQUIRED)
@@ -165,3 +166,4 @@ PRIVATE
 
 # add_test(NAME test_vulkan COMMAND graphics_test_suite "[vulkan]")
 add_test(NAME test_egl COMMAND graphics_test_suite "[egl]")
+add_test(NAME test_windows COMMAND graphics_test_suite "[windows]")

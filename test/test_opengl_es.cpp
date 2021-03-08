@@ -84,19 +84,14 @@ void get_extensions(EGLDisplay display, std::vector<std::string_view>& names) {
     }
 }
 
-void print_context_info(EGLDisplay display, EGLContext context) {
-    // const EGLSurface surface_0 = EGL_NO_SURFACE; // read
-    // const EGLSurface surface_1 = EGL_NO_SURFACE; // draw
-    // eglMakeCurrent(display, surface_1, surface_0, context);
-    // REQUIRE(eglGetError() == EGL_SUCCESS);
-    const auto version = eglQueryString(display, EGL_VERSION);
-    const auto vendor = eglQueryString(display, EGL_VENDOR);
-    const auto api = eglQueryString(display, EGL_CLIENT_APIS);
+void print_info(EGLDisplay display) {
     spdlog::info("EGL:");
-    spdlog::info("  EGL_VERSION: {}", version);
-    spdlog::info("  EGL_VENDOR: '{}'", vendor);
-    spdlog::info("  EGL_CLIENT_APIS: {}", api);
-
+    if (gsl::czstring<> txt = eglQueryString(display, EGL_VERSION))
+        spdlog::info("  EGL_VERSION: {}", txt);
+    if (gsl::czstring<> txt = eglQueryString(display, EGL_VENDOR))
+        spdlog::info("  EGL_VENDOR: '{}'", txt);
+    if (gsl::czstring<> txt = eglQueryString(display, EGL_CLIENT_APIS))
+        spdlog::info("  EGL_CLIENT_APIS: {}", txt);
     std::vector<std::string_view> extensions{};
     get_extensions(display, extensions);
     if (extensions.empty())
@@ -113,18 +108,16 @@ TEST_CASE("EGLContext setup/teardown", "[egl]") {
     EGLint major = 0, minor = 0;
     REQUIRE(eglInitialize(display, &major, &minor) == EGL_TRUE);
     REQUIRE(eglGetError() == EGL_SUCCESS);
-    CAPTURE(major, minor);
     auto on_return1 = gsl::finally([display]() {
         REQUIRE(eglTerminate(display)); // ...
     });
-
+    print_info(display);
     REQUIRE(eglBindAPI(EGL_OPENGL_ES_API));
 
     EGLint count = 0;
     EGLConfig configs[10]{};
     eglChooseConfig(display, nullptr, configs, 10, &count);
     REQUIRE(eglGetError() == EGL_SUCCESS);
-    CAPTURE(count);
 
     // OpenGL ES 3.0
     const EGLint attrs[] = {EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 0, EGL_NONE};
@@ -136,7 +129,6 @@ TEST_CASE("EGLContext setup/teardown", "[egl]") {
         eglDestroyContext(display, context);
         REQUIRE(eglGetError() == EGL_SUCCESS);
     });
-    print_context_info(display, context);
 }
 
 /// @see https://support.microsoft.com/en-us/help/124103/how-to-obtain-a-console-window-handle-hwnd
@@ -211,7 +203,7 @@ TEST_CASE("EGLContext helper with GLFW", "[egl][glfw]") {
         context_t context{EGL_NO_CONTEXT};
         REQUIRE(context.is_valid());
 
-        WHEN("try create EGLSurface and MakeCurrent")
+        WHEN("create EGLSurface and MakeCurrent")
         THEN("EGL_BAD_ALLOC") {
             // window is already created for the context
             REQUIRE(context.resume(glfwGetWin32Window(window.get())) == EGL_BAD_ALLOC);
@@ -224,7 +216,7 @@ TEST_CASE("EGLContext helper with GLFW", "[egl][glfw]") {
         context_t context{shared_context};
         REQUIRE(context.is_valid());
 
-        WHEN("try create EGLSurface and MakeCurrent")
+        WHEN("create EGLSurface and MakeCurrent")
         THEN("EGL_BAD_ALLOC") {
             // window is already created for the context
             REQUIRE(context.resume(glfwGetWin32Window(window.get())) == EGL_BAD_ALLOC);
@@ -383,12 +375,20 @@ TEST_CASE("EGLContext helper with Win32 HINSTANCE", "[egl][windows]") {
     app_context_t app{GetModuleHandleW(NULL)};
     REQUIRE(app.instance);
     REQUIRE(app.window);
-
     REQUIRE(eglGetCurrentContext() == EGL_NO_CONTEXT);
 
     context_t context{EGL_NO_CONTEXT};
     REQUIRE(context.is_valid());
     REQUIRE(context.resume(app.window) == EGL_SUCCESS);
+
+    SECTION("GetString") {
+        spdlog::info("OpenGL(EGL_DEFAULT_DISPLAY):");
+        spdlog::info("  GL_VERSION: {:s}", glGetString(GL_VERSION));
+        spdlog::info("  GL_VENDOR: {:s}", glGetString(GL_VENDOR));
+        spdlog::info("  GL_RENDERER: {:s}", glGetString(GL_RENDERER));
+        spdlog::info("  GL_SHADING_LANGUAGE_VERSION: {:s}", glGetString(GL_SHADING_LANGUAGE_VERSION));
+        REQUIRE(glGetError() == GL_NO_ERROR);
+    }
 }
 
 // see https://www.roxlu.com/2014/048/fast-pixel-transfers-with-pixel-buffer-objects
