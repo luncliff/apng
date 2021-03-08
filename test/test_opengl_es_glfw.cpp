@@ -1,8 +1,7 @@
 #include <catch2/catch.hpp>
-#include <gsl/gsl>
 #include <spdlog/spdlog.h>
 
-#include <opengl_1.h>
+#include <graphics.h>
 #define GLFW_INCLUDE_ES3
 #define GLFW_INCLUDE_GLEXT
 #include <GLFW/glfw3.h>
@@ -10,19 +9,22 @@
 using namespace std;
 
 auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger>;
-auto start_opengl_test() -> gsl::final_action<void (*)()>;
 auto create_opengl_window(gsl::czstring<> window_name) noexcept -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>;
+
+auto start_opengl_test() -> gsl::final_action<void (*)()> {
+    REQUIRE(glfwInit());
+    return gsl::finally(&glfwTerminate);
+}
 
 TEST_CASE("GLFW + OpenGL ES", "[opengl][glfw]") {
     auto on_return = start_opengl_test();
-    auto window = create_opengl_window("OpenGL ES");
+    auto window = create_opengl_window("GLFW3");
     if (window == nullptr) {
         const char* message = nullptr;
         glfwGetError(&message);
         FAIL(message);
     }
     glfwMakeContextCurrent(window.get());
-
     REQUIRE(eglGetCurrentContext() != EGL_NO_CONTEXT);
     REQUIRE(glGetString(GL_SHADING_LANGUAGE_VERSION));
     SECTION("poll event / swap buffer") {
@@ -134,6 +136,7 @@ TEST_CASE("OpenGL PixelBuffer", "[opengl][glfw]") {
     }
 }
 
+#if FALSE
 TEST_CASE("OpenGL readback_t", "[opengl][glfw]") {
     auto stream = get_current_stream();
     auto on_return = start_opengl_test();
@@ -144,7 +147,6 @@ TEST_CASE("OpenGL readback_t", "[opengl][glfw]") {
         FAIL(message);
     }
     glfwMakeContextCurrent(window.get());
-
     GLint frame[4]{};
     glGetIntegerv(GL_VIEWPORT, frame);
     REQUIRE(glGetError() == GL_NO_ERROR);
@@ -159,7 +161,6 @@ TEST_CASE("OpenGL readback_t", "[opengl][glfw]") {
     readback_callback_t is_blue_green = [](void*, const void* mapping, size_t) {
         REQUIRE(*reinterpret_cast<const uint32_t*>(mapping) == 0xFF'FF'FF'00);
     };
-
     opengl_readback_t readback{frame[2], frame[3]};
     glReadBuffer(GL_BACK);
     REQUIRE(glGetError() == GL_NO_ERROR);
@@ -168,11 +169,9 @@ TEST_CASE("OpenGL readback_t", "[opengl][glfw]") {
     while (--count) {
         auto const front = static_cast<uint16_t>((count + 1) % 2);
         auto const back = static_cast<uint16_t>(count % 2);
-
         // perform rendering
         glClearColor(0, static_cast<float>(back), 1, 1);
         glClear(GL_COLOR_BUFFER_BIT);
-
         // pack the back buffer
         if (auto ec = readback.pack(back, 0, frame))
             FAIL(ec);
@@ -191,11 +190,7 @@ TEST_CASE("OpenGL readback_t", "[opengl][glfw]") {
         glfwSwapBuffers(window.get());
     }
 }
-
-auto start_opengl_test() -> gsl::final_action<void (*)()> {
-    REQUIRE(glfwInit());
-    return gsl::finally(&glfwTerminate);
-}
+#endif
 
 /**
  * @see https://www.glfw.org/docs/latest/window_guide.html#GLFW_CONTEXT_CREATION_API_hint

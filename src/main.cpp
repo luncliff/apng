@@ -1,13 +1,8 @@
-#if defined(_WIN32)
-#include <winrt/Windows.Foundation.h>
-#endif
-#include <filesystem>
+#include <graphics.h>
 
 namespace fs = std::filesystem;
 
 using namespace std;
-
-#if defined(_WIN32)
 
 auto create(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)> {
     auto fpath = p.generic_wstring();
@@ -25,63 +20,24 @@ auto open(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)> {
     return {fp, &fclose};
 }
 
-auto read_all(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]> {
+uint32_t get_size(FILE* stream, size_t& sz) noexcept {
     struct _stat64 info {};
     if (_fstat64(_fileno(stream), &info) != 0)
-        throw system_error{errno, system_category(), "_fstat64"};
-    auto blob = make_unique<std::byte[]>(info.st_size);
+        return errno; // throw system_error{errno, system_category(), "_fstat64"};
+    sz = gsl::narrow_cast<size_t>(info.st_size);
+    return 0;
+}
+
+uint32_t fill(FILE* stream, size_t& rsz, std::byte* buf, size_t buflen) noexcept {
     rsz = 0;
     while (!feof(stream)) {
-        void* b = blob.get() + rsz;
-        const auto sz = info.st_size - rsz;
+        void* b = buf + rsz;
+        const auto sz = buflen - rsz;
         rsz += fread_s(b, sz, sizeof(std::byte), sz, stream);
         if (auto ec = ferror(stream))
-            throw system_error{ec, system_category(), "fread_s"};
-        if (rsz == static_cast<size_t>(info.st_size))
+            return ec; // throw system_error{ec, system_category(), "fread_s"};
+        if (rsz == buflen)
             break;
     }
-    return blob;
-}
-
-#else
-#include <sys/stat.h>
-
-auto create(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)> {
-    auto fpath = p.generic_u8string();
-    FILE* fp = fopen(fpath.c_str(), "w+b");
-    if (fp == nullptr)
-        throw system_error{errno, system_category(), "fopen"};
-    return {fp, &fclose};
-}
-
-auto open(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)> {
-    auto fpath = p.generic_u8string();
-    FILE* fp = fopen(fpath.c_str(), "rb");
-    if (fp == nullptr)
-        throw system_error{errno, system_category(), "fopen"};
-    return {fp, &fclose};
-}
-
-auto read_all(FILE* stream, size_t& rsz) -> std::unique_ptr<std::byte[]> {
-    struct stat info {};
-    if (fstat(fileno(stream), &info) != 0)
-        throw system_error{errno, system_category(), "fstat"};
-    auto blob = make_unique<std::byte[]>(info.st_size);
-    rsz = 0;
-    while (!feof(stream)) {
-        void* b = blob.get() + rsz;
-        const auto sz = info.st_size - rsz;
-        rsz += fread(b, sizeof(byte), sz, stream);
-        if (auto ec = ferror(stream))
-            throw system_error{ec, system_category(), "fread"};
-        if (rsz == static_cast<size_t>(info.st_size))
-            break;
-    }
-    return blob;
-}
-#endif
-
-auto read_all(const fs::path& p, size_t& fsize) -> std::unique_ptr<std::byte[]> {
-    auto fin = open(p);
-    return read_all(fin.get(), fsize);
+    return 0;
 }

@@ -11,19 +11,20 @@ set(CMAKE_VS_WINRT_BY_DEFAULT true)
 # set(CMAKE_VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "10.0.17763.0")
 
 add_library(graphics
+    include/graphics.h
     src/main.cpp
-    # src/vulkan.cpp
-    # src/vulkan_1.h
-    # src/vulkan_1.cpp
-    src/opengl_1.h
-    src/opengl.cpp
-    src/opengl_es.cpp
+    src/context.cpp
+    src/programs.cpp
+    # src/opengl_1.h
+    # src/opengl.cpp
+    # src/opengl_es.cpp
 )
 
 set_target_properties(graphics
 PROPERTIES
     CXX_STANDARD 17
     WINDOWS_EXPORT_ALL_SYMBOLS  true
+    PUBLIC_HEADER include/graphics.h
 )
 
 find_package(Vulkan)
@@ -34,8 +35,9 @@ find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
 
 target_include_directories(graphics
 PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 PRIVATE
+    src
     externals/include
 )
 
@@ -131,7 +133,7 @@ add_executable(graphics_test_suite
     # test/test_vulkan_pipeline.cpp
     # test/test_vulkan_descriptor_set.cpp
     # test/test_opengl_es_windows.cpp
-    # test/test_opengl_es_glfw.cpp
+    test/test_opengl_es_glfw.cpp
     # test/test_directx.cpp
 )
 # add_dependencies(graphics_test_suite compile_shaders_glsl)
