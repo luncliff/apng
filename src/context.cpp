@@ -22,7 +22,7 @@ std::error_category& get_opengl_category() noexcept {
 };
 
 EGLint report_egl_error(gsl::czstring<> fname, EGLint ec = eglGetError()) {
-    spdlog::error("{}: {:x}", fname, ec);
+    spdlog::error("{}: {:#x}", fname, ec);
     return ec;
 }
 
@@ -37,24 +37,23 @@ context_t::context_t(EGLContext share_context) noexcept {
     }
     major = gsl::narrow<uint16_t>(version[0]);
     minor = gsl::narrow<uint16_t>(version[1]);
-    spdlog::debug("EGLDisplay {:x} {}.{}", display, major, minor);
+    spdlog::debug("EGLDisplay {} {}.{}", display, major, minor);
 
     // acquire EGLConfigs
-    EGLint num_config = 0;
+    EGLint num_config = 3;
     if (auto ec = get_configs(display, configs, num_config)) {
         report_egl_error("eglChooseConfig", ec);
         return;
     }
-
-    // create context
-    EGLint attrs[]{EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
+    // create context for OpenGL ES 3.0+
+    EGLint attrs[]{EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 0, EGL_NONE};
     context = eglCreateContext(display, configs[0], share_context, attrs);
     if (context != EGL_NO_CONTEXT)
-        spdlog::debug("EGL create: context {:x} {:x}", context, share_context);
+        spdlog::debug("EGL create: context {} {}", context, share_context);
 }
 
 bool context_t::is_valid() const noexcept {
-    return context == EGL_NO_CONTEXT;
+    return context != EGL_NO_CONTEXT;
 }
 
 context_t::~context_t() noexcept {
@@ -70,17 +69,17 @@ EGLint context_t::resume(gsl::not_null<EGLNativeWindowType> window) noexcept {
     // create surface with the window
     surface = eglCreateWindowSurface(display, configs[0], window, NULL);
     if (surface == EGL_NO_SURFACE)
-        return eglGetError();
+        return eglGetError(); /// @todo the value can be EGL_SUCCESS. Check the available cases
 
     // query some values for future debugging
     eglQuerySurface(display, surface, EGL_WIDTH, &surface_width);
     eglQuerySurface(display, surface, EGL_HEIGHT, &surface_height);
     if (auto ec = eglGetError(); ec != EGL_SUCCESS)
         return report_egl_error("eglQuerySurface", ec);
-    spdlog::debug("EGL create: surface {:x} {} {}", surface, surface_width, surface_height);
+    spdlog::debug("EGL create: surface {} {} {}", surface, surface_width, surface_height);
 
     // bind surface and context
-    spdlog::debug("EGL current: {:x}/{:x} {:x}", surface, surface, context);
+    spdlog::debug("EGL current: {}/{} {}", surface, surface, context);
     if (eglMakeCurrent(display, surface, surface, context) == EGL_FALSE)
         return report_egl_error("eglMakeCurrent", eglGetError());
     return EGL_SUCCESS;
@@ -92,17 +91,19 @@ EGLint context_t::suspend() noexcept {
         return EGL_NOT_INITIALIZED;
 
     // unbind surface
-    spdlog::debug("EGL current: EGL_NO_SURFACE/EGL_NO_SURFACE {:x}", context);
+    spdlog::debug("EGL current: EGL_NO_SURFACE/EGL_NO_SURFACE {}", context);
     if (eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, context) == EGL_FALSE)
         // GLES 3.0 will report error but ignore.
         // we just want to make sure of unbind here...
         report_egl_error("eglMakeCurrent", eglGetError());
 
     // destroy known surface
-    spdlog::warn("EGL destroy: surface {:x}", surface);
-    if (eglDestroySurface(display, surface) == EGL_FALSE)
-        return report_egl_error("eglDestroySurface", eglGetError());
-    surface = EGL_NO_SURFACE;
+    if (surface != EGL_NO_SURFACE) {
+        spdlog::warn("EGL destroy: surface {}", surface);
+        if (eglDestroySurface(display, surface) == EGL_FALSE)
+            return report_egl_error("eglDestroySurface", eglGetError());
+        surface = EGL_NO_SURFACE;
+    }
     return EGL_SUCCESS;
 }
 
@@ -119,20 +120,20 @@ void context_t::terminate() noexcept {
     }
     // destroy known context
     if (context != EGL_NO_CONTEXT) {
-        spdlog::warn("EGL destroy: context {:x}", context);
+        spdlog::warn("EGL destroy: context {}", context);
         if (eglDestroyContext(display, context) == EGL_FALSE)
             report_egl_error("eglDestroyContext", eglGetError());
         context = EGL_NO_CONTEXT;
     }
     // destroy known surface
     if (surface != EGL_NO_SURFACE) {
-        spdlog::warn("EGL destroy:surface {:x}", surface);
+        spdlog::warn("EGL destroy:surface {}", surface);
         if (eglDestroySurface(display, surface) == EGL_FALSE)
             report_egl_error("eglDestroySurface", eglGetError());
         surface = EGL_NO_SURFACE;
     }
     // terminate EGL
-    spdlog::warn("EGL terminate: {:x}", display);
+    spdlog::warn("EGL terminate: {}", display);
     if (eglTerminate(display) == EGL_FALSE)
         report_egl_error("eglTerminate", eglGetError());
     display = EGL_NO_DISPLAY;
@@ -151,20 +152,18 @@ EGLint context_t::swap() noexcept {
 }
 
 EGLint context_t::get_configs(EGLDisplay display, EGLConfig* configs, EGLint& count) noexcept {
-    EGLint attrs[]{EGL_RENDERABLE_TYPE,
-                   EGL_OPENGL_ES2_BIT,
-                   EGL_SURFACE_TYPE,
-                   EGL_WINDOW_BIT,
-                   EGL_BLUE_SIZE,
-                   8,
-                   EGL_GREEN_SIZE,
-                   8,
-                   EGL_RED_SIZE,
-                   8,
-                   EGL_DEPTH_SIZE,
-                   24,
-                   EGL_NONE};
-    if (eglChooseConfig(display, attrs, configs, count, &count) == EGL_FALSE)
+    // clang-format off
+    //constexpr auto color_size = 8;
+    //constexpr auto depth_size = 24;
+    //EGLint attrs[]{EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+    //               EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+    //               EGL_BLUE_SIZE, color_size, // 8
+    //               EGL_GREEN_SIZE, color_size, // 8
+    //               EGL_RED_SIZE, color_size, // 8
+    //               EGL_DEPTH_SIZE, depth_size, // 24
+    //               EGL_NONE};
+    // clang-format on
+    if (eglChooseConfig(display, nullptr, configs, count, &count) == EGL_FALSE)
         return eglGetError();
     return 0;
 }

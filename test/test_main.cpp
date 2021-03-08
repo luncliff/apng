@@ -26,17 +26,15 @@ fs::path get_asset_dir() noexcept {
     return fs::current_path();
 }
 
-auto stream = spdlog::stdout_color_st("test");
-
-auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger> {
-    using namespace spdlog::level;
-    stream->set_pattern("%v");
-    stream->set_level(level_enum::trace);
-    return stream;
-}
-
 int main(int argc, char* argv[]) {
     setlocale(LC_ALL, ".65001");
+
+    using namespace spdlog::level;
+    auto stream = spdlog::stdout_color_st("test");
+    stream->set_pattern("%v");
+    stream->set_level(level_enum::trace);
+    spdlog::set_default_logger(stream);
+
     winrt::init_apartment();
     auto on_exit = gsl::finally(&winrt::uninit_apartment);
     Catch::Session session{};

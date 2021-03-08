@@ -24,7 +24,7 @@
           "type": "STRING"
         },
         {
-          "name": "BUILD_TESTING",
+          "name": "BUILD_SHARED_LIBS",
           "value": "true",
           "type": "BOOL"
         },
@@ -59,7 +59,7 @@
           "type": "STRING"
         },
         {
-          "name": "BUILD_TESTING",
+          "name": "BUILD_SHARED_LIBS",
           "value": "true",
           "type": "BOOL"
         }

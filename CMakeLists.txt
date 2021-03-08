@@ -31,7 +31,8 @@ find_package(Vulkan)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Microsoft.GSL CONFIG REQUIRED)
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
-# find_package(directxtk CONFIG REQUIRED)
+find_package(directxtk CONFIG REQUIRED)
+find_package(directxtex CONFIG REQUIRED)
 
 target_include_directories(graphics
 PUBLIC
@@ -56,8 +57,8 @@ PRIVATE
 target_link_libraries(graphics
 PUBLIC
     Microsoft.GSL::GSL spdlog::spdlog
+    Microsoft::DirectXTK Microsoft::DirectXTex
     windowsapp windowscodecs
-    # Microsoft::DirectXTK 
 )
 if(Vulkan_FOUND)
     target_link_libraries(graphics
@@ -132,8 +133,7 @@ add_executable(graphics_test_suite
     # test/test_vulkan_surface_glfw.cpp
     # test/test_vulkan_pipeline.cpp
     # test/test_vulkan_descriptor_set.cpp
-    # test/test_opengl_es_windows.cpp
-    test/test_opengl_es_glfw.cpp
+    test/test_opengl_es.cpp
     # test/test_directx.cpp
 )
 # add_dependencies(graphics_test_suite compile_shaders_glsl)
@@ -164,6 +164,4 @@ PRIVATE
 )
 
 # add_test(NAME test_vulkan COMMAND graphics_test_suite "[vulkan]")
-# add_test(NAME test_opengl COMMAND graphics_test_suite "[opengl]")
-# add_test(NAME test_opengl_es COMMAND graphics_test_suite "[egl]")
-add_test(NAME test_windows  COMMAND graphics_test_suite "[windows]")
+add_test(NAME test_egl COMMAND graphics_test_suite "[egl]")

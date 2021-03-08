@@ -20,7 +20,9 @@
 #else
 #define GL_GLEXT_PROTOTYPES
 #include <GLES3/gl3.h>
+#if __has_include(<GLES3/gl31.h>)
 #include <GLES3/gl31.h>
+#endif
 #endif
 
 #if __has_include(<EGL/egl.h>)
@@ -38,17 +40,24 @@ std::error_category& get_opengl_category() noexcept;
 class context_t final {
   private:
     gsl::owner<EGLDisplay> display = EGL_NO_DISPLAY;
-    uint16_t major, minor{};
+    uint16_t major = 0, minor = 0;
     gsl::owner<EGLContext> context = EGL_NO_CONTEXT;
     EGLConfig configs[3]{};
     gsl::owner<EGLSurface> surface = EGL_NO_SURFACE; // EGLSurface for Draw/Read
     int32_t surface_width = 0;
     int32_t surface_height = 0;
-    int32_t color_size = 8;
-    int32_t depth_size = 24;
 
   public:
+    /**
+     * @brief Acquire EGLDisplay and create an EGLContext for OpenGL ES 3.0+
+     * @see eglInitialize
+     * @see eglChooseConfig
+     * @see eglCreateContext
+     */
     explicit context_t(EGLContext share_context) noexcept;
+    /**
+     * @see terminate
+     */
     ~context_t() noexcept;
     context_t(context_t const&) = delete;
     context_t& operator=(context_t const&) = delete;
@@ -98,5 +107,6 @@ class context_t final {
      */
     EGLint swap() noexcept;
 
-    EGLint get_configs(EGLDisplay display, EGLConfig* configs, EGLint& count) noexcept;
+  private:
+    static EGLint get_configs(EGLDisplay display, EGLConfig* configs, EGLint& count) noexcept;
 };
