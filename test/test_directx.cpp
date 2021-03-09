@@ -5,83 +5,67 @@
 //#define CATCH_CONFIG_WINDOWS_CRTDBG
 #include <catch2/catch.hpp>
 #include <spdlog/spdlog.h>
+
 // clang-format off
-#include <opengl_1.h>
+#include <graphics.h>
 #include <EGL/eglext_angle.h>
+// clang-format on
 
 #include <pplawait.h>
 #include <ppltasks.h>
 #include <winrt/Windows.Foundation.h> // namespace winrt::Windows::Foundation
 #include <winrt/Windows.System.h>     // namespace winrt::Windows::System
 
-#include <wincodecsdk.h>
-#include <DirectXTK/WICTextureLoader.h>
-
-#include <d3d9.h>
-#pragma comment(lib, "d3d9.lib")
-
+// clang-format off
 #include <d3d11.h>
 #include <d3d11_1.h>
+#include <d3dcompiler.h>
+#include <DirectXTex.h>
+#include <DirectXTK/DirectXHelpers.h>
+#include <DirectXTK/WICTextureLoader.h>
 #pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "dxgi.lib")
-
-//#include <d3dcompiler.h>
-//#pragma comment(lib, "d3dcompiler.lib")
-
+#include <wincodec.h>
+#include <wincodecsdk.h>
 // clang-format on
 
 using namespace std;
+namespace fs = std::filesystem;
 using winrt::com_ptr;
 
-auto get_current_stream() noexcept -> std::shared_ptr<spdlog::logger>;
-fs::path get_asset_dir() noexcept;
-
-TEST_CASE("D3D9 Device", "[directx]") {
-    com_ptr<IDirect3D9Ex> dxd9{};
-    REQUIRE(Direct3DCreate9Ex(D3D_SDK_VERSION, dxd9.put()) == S_OK);
-    D3DPRESENT_PARAMETERS params{};
-    params.BackBufferWidth = 1920;
-    params.BackBufferHeight = 1080;
-    params.BackBufferFormat = D3DFMT_A8R8G8B8;
-    params.BackBufferCount = 1;
-    params.SwapEffect = D3DSWAPEFFECT_DISCARD;
-    params.Windowed = true;
-    params.hDeviceWindow = NULL; // HWND
-    params.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
-    com_ptr<IDirect3DDevice9> device{};
-    REQUIRE(dxd9->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, NULL, D3DCREATE_HARDWARE_VERTEXPROCESSING, &params,
-                               device.put()) == S_OK);
-    REQUIRE(device);
-}
-
-TEST_CASE("ID3D11Device with feature level", "[directx]") {
+class ID3D11DeviceTestCase1 {
+  protected:
     com_ptr<ID3D11Device> device{};
-    com_ptr<ID3D11DeviceContext> context{};
-    SECTION("D3D_FEATURE_LEVEL_9_3") {
-        D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_9_3;
-        REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, nullptr, 0, //
-                                  D3D11_SDK_VERSION, device.put(), &level, context.put()) == S_OK);
-        REQUIRE(device);
-        REQUIRE(device->GetFeatureLevel() == level);
-    }
-    SECTION("D3D_FEATURE_LEVEL_10_1") {
-        D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_10_1;
-        REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, nullptr, 0, //
-                                  D3D11_SDK_VERSION, device.put(), &level, context.put()) == S_OK);
-        REQUIRE(device);
-        REQUIRE(device->GetFeatureLevel() == level);
-    }
-    SECTION("D3D_FEATURE_LEVEL_11_1") {
-        D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_1;
-        REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, nullptr, 0, //
-                                  D3D11_SDK_VERSION, device.put(), &level, context.put()) == S_OK);
-        REQUIRE(device);
-        REQUIRE(device->GetFeatureLevel() == level);
-    }
+    com_ptr<ID3D11DeviceContext> device_context{};
+};
+
+TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_9_3", "[windows]") {
+    D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_9_3;
+    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
+                              D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
+    REQUIRE(device);
+    REQUIRE(device->GetFeatureLevel() == level);
 }
 
-TEST_CASE("eglGetPlatformDisplay(EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE)", "[egl][directx]") {
+TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_10_1", "[windows]") {
+    D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_10_1;
+    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
+                              D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
+    REQUIRE(device);
+    REQUIRE(device->GetFeatureLevel() == level);
+}
+
+TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_1", "[windows]") {
+    D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_1;
+    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
+                              D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
+    REQUIRE(device);
+    REQUIRE(device->GetFeatureLevel() == level);
+}
+
+TEST_CASE("eglGetPlatformDisplay(EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE)", "[egl][windows][!mayfail]") {
     EGLAttrib attrs[]{
         EGL_PLATFORM_ANGLE_TYPE_ANGLE,
         EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE,
@@ -111,10 +95,9 @@ HRESULT check_dxgi_adapter(IDXGIAdapter* adapter) noexcept(false) {
     DXGI_ADAPTER_DESC info{};
     if (auto hr = adapter->GetDesc(&info); FAILED(hr))
         return hr;
-    auto stream = get_current_stream();
-    stream->info("{}:", w2mb(info.Description));
-    stream->info(" - device_id: {:x}", info.DeviceId);
-    stream->info(" - vendor_id: {:x}", info.VendorId);
+    spdlog::info("{}:", w2mb(info.Description));
+    spdlog::info(" - device_id: {:x}", info.DeviceId);
+    spdlog::info(" - vendor_id: {:x}", info.VendorId);
     return S_OK;
 }
 
@@ -265,7 +248,9 @@ TEST_CASE("ID3D11Texture2D(D3D11_USAGE_DYNAMIC)", "[directx][texture]") {
     context->Unmap(texture.get(), 0);
 }
 
-SCENARIO("IWICImagingFactor", "[windows]") {
+fs::path get_asset_dir() noexcept;
+
+SCENARIO("IWICImagingFactory", "[windows]") {
     com_ptr<IWICImagingFactory> factory{};
     REQUIRE(CoCreateInstance(CLSID_WICImagingFactory, NULL, //
                              CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.put())) == S_OK);
@@ -360,9 +345,7 @@ void make_device_and_context(com_ptr<ID3D11Device>& device, com_ptr<ID3D11Device
 }
 
 /// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLPresentPathD3D11Test.cpp
-SCENARIO("ID3D11Texture2D to EGLImage", "[egl]") {
-    auto stream = get_current_stream();
-
+SCENARIO("ID3D11Texture2D to EGLImage", "[egl][!mayfail]") {
     com_ptr<ID3D11Device> device{};
     com_ptr<ID3D11DeviceContext> context{};
     D3D_FEATURE_LEVEL level{};
@@ -421,7 +404,8 @@ SCENARIO("ID3D11Texture2D to EGLImage", "[egl]") {
             REQUIRE(count);
         }
 
-        const EGLint attrs[] = {EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 1, EGL_NONE};
+        // @todo change to OpenGL ES 3.0
+        const EGLint attrs[]{EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 1, EGL_NONE};
         const EGLContext es_context = eglCreateContext(es_display, es_configs[0], EGL_NO_CONTEXT, attrs);
         REQUIRE(eglGetError() == EGL_SUCCESS);
         eglMakeCurrent(es_display, EGL_NO_SURFACE, EGL_NO_SURFACE, es_context);
@@ -430,7 +414,7 @@ SCENARIO("ID3D11Texture2D to EGLImage", "[egl]") {
             eglMakeCurrent(es_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
             REQUIRE(eglGetError() == EGL_SUCCESS);
         });
-        stream->debug("{:s}", glGetString(GL_VERSION));
+        spdlog::debug("{:s}", glGetString(GL_VERSION));
 
         WHEN("create EGLSurface from shared resource") {
             com_ptr<IDXGIResource> resource{};

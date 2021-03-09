@@ -88,15 +88,14 @@ PUBLIC
 if(DEFINED ENV{Qt5_DIR} OR DEFINED Qt5_DIR)
     list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
     find_package(QtANGLE REQUIRED)
-
+    message(STATUS "Using QtANGLE: ${QtANGLE_RUNTIME_DIR}")
     target_link_libraries(graphics
     PUBLIC
         Qt5::libEGL Qt5::libGLESv2
     )
-    file(COPY ${QtANGLE_EGL_LOCATION} ${QtANGLE_GLES_LOCATION}
-         DESTINATION ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}
-    )
-    message(STATUS "Copied QtANGLE: ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}")
+    file(COPY ${QtANGLE_EGL_LOCATION} ${QtANGLE_GLES_LOCATION} DESTINATION ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE})
+    file(COPY ${QtANGLE_EGL_LOCATION} ${QtANGLE_GLES_LOCATION} DESTINATION ${CMAKE_BINARY_DIR})
+    message(STATUS "Copied QtANGLE: ${CMAKE_BINARY_DIR}, ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}")
 
 else()
     find_package(unofficial-angle CONFIG REQUIRED)
@@ -135,7 +134,8 @@ add_executable(graphics_test_suite
     # test/test_vulkan_pipeline.cpp
     # test/test_vulkan_descriptor_set.cpp
     test/test_opengl_es.cpp
-    # test/test_directx.cpp
+    test/test_qt5.cpp
+    test/test_directx.cpp
 )
 # add_dependencies(graphics_test_suite compile_shaders_glsl)
 
@@ -162,6 +162,8 @@ PRIVATE
 target_compile_definitions(graphics_test_suite
 PRIVATE
     ASSET_DIR="${PROJECT_SOURCE_DIR}/assets"
+    CATCH_CONFIG_BENCHMARK
+    CATCH_CONFIG_FAST_COMPILE
 )
 
 # add_test(NAME test_vulkan COMMAND graphics_test_suite "[vulkan]")

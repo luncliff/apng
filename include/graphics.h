@@ -15,17 +15,31 @@
 #include <vulkan/vulkan.h>
 #endif
 
-#if __has_include(<angle_gl.h>)
+#define GL_GLEXT_PROTOTYPES
+#define EGL_EGLEXT_PROTOTYPES
+#if __has_include(<QtOpenGL/qgl.h>) // from Qt5::OpenGL
+// #define GL_GLEXT_PROTOTYPES
+#include <QtOpenGL/qglfunctions.h>
+// #define EGL_EGLEXT_PROTOTYPES
+#include <QtANGLE/EGL/egl.h>
+#include <QtANGLE/EGL/eglext.h>
+#include <QtANGLE/EGL/eglext_angle.h>
+
+#elif __has_include(<angle_gl.h>) // from google/ANGLE
 #include <angle_gl.h>
+#if __has_include(<angle_windowsstore.h>)
+#include <angle_windowsstore.h>
+#endif
+#define EGL_EGLEXT_PROTOTYPES
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+
 #else
 #define GL_GLEXT_PROTOTYPES
 #include <GLES3/gl3.h>
 #if __has_include(<GLES3/gl31.h>)
 #include <GLES3/gl31.h>
 #endif
-#endif
-
-#if __has_include(<EGL/egl.h>)
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #endif

@@ -22,14 +22,15 @@
 #include <winrt/Windows.System.h>     // namespace winrt::Windows::System
 
 // clang-format off
-#include <d3d11.h>
 #include <d3d11_1.h>
 #include <d3dcompiler.h>
-#include <directxmath.h>
-#include <DirectXColors.h>
+#include <DirectXTex.h>
+#include <DirectXTK/DirectXHelpers.h>
+#include <DirectXTK/WICTextureLoader.h>
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "dxgi.lib")
 // clang-format on
 
 using namespace std;
