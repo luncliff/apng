@@ -20,8 +20,7 @@
 // clang-format on
 #endif
 
-#define EGL_PROC(fp, name) auto fp = reinterpret_cast<decltype(&name)>(eglGetProcAddress(#name));
-#undef EGL_PROC
+#define LOCAL_EGL_PROC(fn, name) auto fn = reinterpret_cast<decltype(&name)>(eglGetProcAddress(#name));
 
 class EGLConfigTestCase1 {
   protected:

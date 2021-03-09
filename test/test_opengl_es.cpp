@@ -276,7 +276,8 @@ TEST_CASE("GLFW info", "[glfw]") {
 struct app_context_t final {
     HINSTANCE instance;
     HWND window;
-    WNDCLASSEX winclass;
+    WNDCLASSEXW winclass;
+    DEVMODEW mode;
 
   public:
     static LRESULT CALLBACK on_key_msg(HWND hwnd, UINT umsg, //
@@ -303,10 +304,8 @@ struct app_context_t final {
     }
 
   public:
-    explicit app_context_t(HINSTANCE happ, HWND hwnd, LPCSTR classname) : instance{happ}, window{hwnd}, winclass{} {
-        winclass.lpszClassName = classname;
-    }
-    explicit app_context_t(HINSTANCE happ) : instance{happ}, window{}, winclass{} {
+    explicit app_context_t(HINSTANCE happ, LPCWSTR class_name = L"----")
+        : instance{happ}, window{}, winclass{}, mode{} {
         // Setup the windows class with default settings.
         winclass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
         winclass.lpfnWndProc = on_wnd_msg;
@@ -315,29 +314,27 @@ struct app_context_t final {
         winclass.hCursor = LoadCursor(NULL, IDC_ARROW);
         winclass.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
         winclass.lpszMenuName = NULL;
-        winclass.lpszClassName = TEXT("Engine");
-        winclass.cbSize = sizeof(WNDCLASSEX);
-        RegisterClassEx(&winclass);
+        winclass.lpszClassName = class_name;
+        winclass.cbSize = sizeof(WNDCLASSEXW);
+        RegisterClassExW(&winclass);
 
         int posX = 0, posY = 0;
         auto screenWidth = 100 * 16, screenHeight = 100 * 9;
         // fullscreen: maximum size of the users desktop and 32bit
         if (true) {
-            DEVMODE mode{};
             mode.dmSize = sizeof(mode);
             mode.dmPelsWidth = GetSystemMetrics(SM_CXSCREEN);
             mode.dmPelsHeight = GetSystemMetrics(SM_CYSCREEN);
             mode.dmBitsPerPel = 32;
             mode.dmFields = DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT;
             // Change the display settings to full screen.
-            ChangeDisplaySettings(&mode, CDS_FULLSCREEN);
+            ChangeDisplaySettingsW(&mode, CDS_FULLSCREEN);
         }
 
         // Create the window with the screen settings and get the handle to it.
-        this->window = CreateWindowEx(WS_EX_APPWINDOW, winclass.lpszClassName, winclass.lpszClassName,
-                                      WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_POPUP, posX, posY, screenWidth,
-                                      screenHeight, NULL, NULL, happ, NULL);
-
+        this->window = CreateWindowExW(WS_EX_APPWINDOW, winclass.lpszClassName, winclass.lpszClassName,
+                                       WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_POPUP, posX, posY, screenWidth,
+                                       screenHeight, NULL, NULL, happ, NULL);
         // Bring the window up on the screen and set it as main focus.
         ShowWindow(this->window, SW_SHOW);
         SetForegroundWindow(this->window);
@@ -346,13 +343,13 @@ struct app_context_t final {
     }
     ~app_context_t() {
         DestroyWindow(this->window);
-        UnregisterClassA(this->winclass.lpszClassName, nullptr);
+        UnregisterClassW(this->winclass.lpszClassName, nullptr);
     }
 
     bool consume_message(MSG& msg) {
-        if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+        if (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
-            DispatchMessage(&msg);
+            DispatchMessageW(&msg);
         }
         return msg.message != WM_QUIT;
     }
