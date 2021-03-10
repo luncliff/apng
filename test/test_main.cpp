@@ -19,7 +19,6 @@
 #include <winrt/Windows.System.h>     // namespace winrt::Windows::System
 
 namespace fs = std::filesystem;
-using namespace std;
 using winrt::com_ptr;
 
 fs::path get_asset_dir() noexcept {

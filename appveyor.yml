@@ -79,7 +79,7 @@ before_test:
 
 test_script:
   # - ps: ./graphics_test_suite.exe --reporter sonarqube --out sonarqube.xml
-  - ps: ./graphics_test_suite.exe --success
+  - ps: ./graphics_test_suite.exe
 
 after_test:
   - ps: Pop-Location

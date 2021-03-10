@@ -23,13 +23,13 @@ add_library(graphics
 set_target_properties(graphics
 PROPERTIES
     CXX_STANDARD 17
-    WINDOWS_EXPORT_ALL_SYMBOLS  true
+    WINDOWS_EXPORT_ALL_SYMBOLS  true # todo: remove this
     PUBLIC_HEADER include/graphics.h
 )
 
 find_package(spdlog CONFIG REQUIRED)
 find_package(Microsoft.GSL CONFIG REQUIRED)
-find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
+find_package(nlohmann_json CONFIG REQUIRED) # find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
 find_package(directxtk CONFIG REQUIRED)
 find_package(directxtex CONFIG REQUIRED)
 
@@ -131,12 +131,13 @@ find_package(Catch2 CONFIG REQUIRED)
 
 add_executable(graphics_test_suite
     test/test_main.cpp
+    test/test_gltf.cpp
+    test/test_directx.cpp
+    test/test_opengl_es.cpp
     # test/test_vulkan_device.cpp
     # test/test_vulkan_surface_glfw.cpp
     # test/test_vulkan_pipeline.cpp
     # test/test_vulkan_descriptor_set.cpp
-    test/test_opengl_es.cpp
-    test/test_directx.cpp
 )
 if(QtANGLE_FOUND)
     target_sources(graphics_test_suite
@@ -157,8 +158,8 @@ PRIVATE
 )
 
 target_link_libraries(graphics_test_suite
-PUBLIC
-    graphics glfw Catch2::Catch2
+PRIVATE
+    graphics glfw Catch2::Catch2 nlohmann_json::nlohmann_json
 )
 
 target_compile_options(graphics_test_suite
@@ -170,9 +171,10 @@ target_compile_definitions(graphics_test_suite
 PRIVATE
     ASSET_DIR="${PROJECT_SOURCE_DIR}/assets"
     CATCH_CONFIG_BENCHMARK
-    CATCH_CONFIG_FAST_COMPILE
+    # CATCH_CONFIG_FAST_COMPILE
 )
 
 # add_test(NAME test_vulkan COMMAND graphics_test_suite "[vulkan]")
 add_test(NAME test_egl COMMAND graphics_test_suite "[egl]")
 add_test(NAME test_windows COMMAND graphics_test_suite "[windows]")
+add_test(NAME test_directx COMMAND graphics_test_suite "[windows]")

@@ -35,7 +35,6 @@
 #pragma comment(lib, "dxgi.lib")
 // clang-format on
 
-using namespace std;
 using winrt::com_ptr;
 
 TEST_CASE("eglGetProcAddress != GetProcAddress", "[egl]") {
@@ -287,13 +286,22 @@ struct glfw_test_case {
     std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)> window{nullptr, nullptr};
 
   public:
+    static void on_error(int code, const char* description) {
+        spdlog::error("code {} message {}", code, description);
+    }
+    static void on_close(GLFWwindow* window) {
+        spdlog::trace("closing GLFW window {}", static_cast<void*>(window));
+    }
+
     glfw_test_case() {
+        glfwSetErrorCallback(on_error);
         window = create_opengl_window("GLFW3", 800, 800);
         if (window == nullptr) {
             const char* message = nullptr;
             glfwGetError(&message);
             FAIL(message);
         }
+        glfwSetWindowCloseCallback(window.get(), on_close);
     }
 };
 

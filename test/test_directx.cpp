@@ -32,7 +32,6 @@
 #include <wincodecsdk.h>
 // clang-format on
 
-using namespace std;
 namespace fs = std::filesystem;
 using winrt::com_ptr;
 
@@ -249,17 +248,17 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D(D3D11_USAGE_DYNAMIC)
     // see https://docs.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-map
     D3D11_MAPPED_SUBRESOURCE mapping{};
     REQUIRE(device_context->Map(texture.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapping) == S_OK);
-    CAPTURE(mapping.DepthPitch);
     REQUIRE(mapping.pData);
+    CAPTURE(mapping.RowPitch, mapping.DepthPitch);
     switch (desc.Format) {
     case DXGI_FORMAT_R8G8B8A8_UNORM:
-        REQUIRE(mapping.RowPitch == 500 * 4); // the region is aligned in 16 bytes
+        REQUIRE(mapping.RowPitch >= 500 * 4); // the region is aligned in 16 bytes
         break;
     case DXGI_FORMAT_NV12:
-        REQUIRE(mapping.RowPitch == 500);
+        REQUIRE(mapping.RowPitch >= 500);
         break;
     case DXGI_FORMAT_YUY2:
-        REQUIRE(mapping.RowPitch == 500 * 2);
+        REQUIRE(mapping.RowPitch >= 500 * 2);
         break;
     }
     device_context->Unmap(texture.get(), 0);
