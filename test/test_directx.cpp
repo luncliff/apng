@@ -46,7 +46,8 @@ class ID3D11DeviceTestCase1 {
 
 TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_0(D3D_DRIVER_TYPE_REFERENCE)", "[directx][!mayfail]") {
     D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
-    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_REFERENCE, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
+    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_REFERENCE, NULL,
+                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
     REQUIRE(device);
     REQUIRE(device->GetFeatureLevel() == level);
@@ -54,7 +55,8 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_0(D3D_DRIVER_TYPE_
 
 TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_0(D3D_DRIVER_TYPE_NULL)", "[directx][!mayfail]") {
     D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
-    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_NULL, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
+    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_NULL, NULL,
+                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
     REQUIRE(device);
     REQUIRE(device->GetFeatureLevel() == level);
@@ -62,7 +64,8 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_0(D3D_DRIVER_TYPE_
 
 TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_10_1(D3D_DRIVER_TYPE_HARDWARE)", "[directx][!mayfail]") {
     D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_10_1;
-    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
+    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL,
+                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
     REQUIRE(device);
     REQUIRE(device->GetFeatureLevel() == level);
@@ -70,7 +73,8 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_10_1(D3D_DRIVER_TYPE_
 
 TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_1(D3D_DRIVER_TYPE_HARDWARE)", "[directx][!mayfail]") {
     D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_1;
-    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
+    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL,
+                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
     REQUIRE(device);
     REQUIRE(device->GetFeatureLevel() == level);
@@ -147,7 +151,8 @@ void make_client_egl_surface(EGLDisplay display, EGLConfig config, ID3D11Texture
 
 TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx][!mayfail]") {
     D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
-    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
+    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL,
+                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
     REQUIRE(device);
     REQUIRE(device->GetFeatureLevel() == level);
@@ -192,9 +197,11 @@ HRESULT make_device_and_context(ID3D11Device** device, ID3D11DeviceContext** con
         REQUIRE(adapter->GetDesc(&info) == S_OK);
         break; // take the first one
     }
-    return D3D11CreateDevice(adapter.get(), adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE,    //
-                             NULL, D3D11_CREATE_DEVICE_DEBUG | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
-                             D3D11_SDK_VERSION, device, &level, context);
+    return D3D11CreateDevice(
+        adapter.get(), adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE, //
+        NULL, D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+        nullptr, 0, //
+        D3D11_SDK_VERSION, device, &level, context);
 }
 
 // Will this TC success on AppVeyor?
@@ -216,7 +223,8 @@ class ID3D11Texture2DTestCase1 {
     ID3D11Texture2DTestCase1() noexcept(false) {
         REQUIRE(CoCreateInstance(CLSID_WICImagingFactory, NULL, //
                                  CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.put())) == S_OK);
-        REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
+        REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL,
+                                  D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
                                   D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
     }
 };
