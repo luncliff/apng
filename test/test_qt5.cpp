@@ -22,30 +22,72 @@
 
 #define LOCAL_EGL_PROC(fn, name) auto fn = reinterpret_cast<decltype(&name)>(eglGetProcAddress(#name));
 
-class EGLConfigTestCase1 {
+/**
+ * @brief EGLConfigTestCase for QtANGLE
+ * 
+ * @see https://www.khronos.org/registry/EGL/sdk/docs/man/html/eglChooseConfig.xhtml
+ * @see https://www.khronos.org/registry/EGL/sdk/docs/man/html/eglGetConfigs.xhtml
+ * @see https://www.khronos.org/registry/EGL/sdk/docs/man/html/eglGetConfigAttrib.xhtml
+ * @todo https://github.com/android/ndk-samples/blob/master/native-activity/app/src/main/cpp/main.cpp
+ */
+class EGLConfigTestCase2 {
   protected:
-    EGLDisplay display;
+    EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     EGLint major = 0, minor = 0;
 
   public:
-    EGLConfigTestCase1() {
-        display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    EGLConfigTestCase2() {
         REQUIRE(display != EGL_NO_DISPLAY);
         if (eglInitialize(display, &major, &minor) == false)
             REQUIRE(eglGetError() == EGL_SUCCESS);
         REQUIRE(eglBindAPI(EGL_OPENGL_ES_API));
     }
-    ~EGLConfigTestCase1() {
+    ~EGLConfigTestCase2() {
         REQUIRE(eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT));
         REQUIRE(eglTerminate(display));
     }
 };
 
-TEST_CASE_METHOD(EGLConfigTestCase1, "ChooseConfig", "[egl]") {
+/// @see https://github.com/google/angle/blob/master/src/libANGLE/Config.cpp
+void print1(EGLDisplay display, EGLConfig config) {
+    EGLint value;
+    REQUIRE(eglGetConfigAttrib(display, config, EGL_CONFIG_ID, &value));
+    spdlog::info("  - EGL_CONFIG_ID: {}", value);
+#define PRINT_IF_SUPPORTED(attribute)                                                                                  \
+    if (eglGetConfigAttrib(display, config, attribute, &value) == EGL_FALSE)                                           \
+        spdlog::debug("    {} --> {}", #attribute, eglGetError()); /* required for both debug and state clear */       \
+    else {                                                                                                             \
+        spdlog::info("    {}: {}", #attribute, value);                                                                 \
+        value = 0;                                                                                                     \
+    }
+    PRINT_IF_SUPPORTED(EGL_CONFIG_CAVEAT)
+    PRINT_IF_SUPPORTED(EGL_NATIVE_VISUAL_ID)
+    PRINT_IF_SUPPORTED(EGL_NATIVE_VISUAL_TYPE)
+    PRINT_IF_SUPPORTED(EGL_SURFACE_TYPE)
+    PRINT_IF_SUPPORTED(EGL_TRANSPARENT_TYPE)
+    PRINT_IF_SUPPORTED(EGL_SAMPLES)
+    PRINT_IF_SUPPORTED(EGL_MAX_PBUFFER_WIDTH)
+    PRINT_IF_SUPPORTED(EGL_MAX_PBUFFER_HEIGHT)
+    PRINT_IF_SUPPORTED(EGL_MAX_PBUFFER_PIXELS)
+    PRINT_IF_SUPPORTED(EGL_BLUE_SIZE)
+    PRINT_IF_SUPPORTED(EGL_GREEN_SIZE)
+    PRINT_IF_SUPPORTED(EGL_RED_SIZE)
+    PRINT_IF_SUPPORTED(EGL_ALPHA_SIZE)
+    PRINT_IF_SUPPORTED(EGL_DEPTH_SIZE)
+    PRINT_IF_SUPPORTED(EGL_STENCIL_SIZE)
+#undef PRINT_IF_SUPPORTED
+}
+
+TEST_CASE_METHOD(EGLConfigTestCase2, "ChooseConfig", "[egl]") {
     EGLint count = 0;
     if (eglChooseConfig(display, nullptr, nullptr, 0, &count) == false)
         REQUIRE(eglGetError() == EGL_SUCCESS);
     REQUIRE(count);
     auto configs = std::make_unique<EGLConfig[]>(count);
     REQUIRE(eglChooseConfig(display, nullptr, configs.get(), count, &count));
+
+    spdlog::info("EGLConfig:");
+    for (auto i = 0; i < count; ++i) {
+        print1(display, configs[i]);
+    }
 }

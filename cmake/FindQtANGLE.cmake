@@ -1,19 +1,19 @@
 # 
 # Authors
-#   - luncliff@gmail.com
+#   - github.com/luncliff (luncliff@gmail.com)
 #
 # References
 #   - https://cmake.org/cmake/help/latest/manual/cmake-qt.7.html
 #   - https://wiki.qt.io/Qt_5_on_Windows_ANGLE_and_OpenGL
 # 
-# Real Cases
+# Tested 'Qt5_DIR's
 #   - Anaconda3 Qt 5.9 - "C:\\Users\\luncl\\Anaconda3\\Library\\lib\\cmake\\Qt5"
-#   - Qt 5.12 - "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2017_64"
+#   - Qt 5.12.9 - "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2017_64"
 #
 cmake_minimum_required(VERSION 3.18)
 
 find_package(Qt5 REQUIRED COMPONENTS OpenGL)
-message(STATUS "Found Qt5::OpenGL")
+message(STATUS "Found Qt5::OpenGL ${Qt5_VERSION}")
 foreach(dirpath ${Qt5OpenGL_INCLUDE_DIRS})
     message(STATUS " - ${dirpath}")
 endforeach()
@@ -65,7 +65,7 @@ if(WIN32)
     get_filename_component(QtANGLE_GLES_LOCATION ${QtANGLE_RUNTIME_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}libGLESv2${CMAKE_SHARED_LIBRARY_SUFFIX} ABSOLUTE)
 endif()
 
-message(STATUS "Found QtANGLE")
+message(STATUS "Found QtANGLE ${Qt5_VERSION}")
 message(STATUS " - ${QtANGLE_INCLUDE_DIR}")
 message(STATUS " - ${QtANGLE_LIBRARY_DIR}")
 message(STATUS "   - ${QtANGLE_EGL_LIBRARY}")
@@ -106,3 +106,5 @@ if(WIN32)
         ${QtANGLE_COMPILE_DEFINITIONS}
     )
 endif()
+
+set(QtANGLE_FOUND TRUE)

@@ -1,3 +1,6 @@
+/**
+ * @author Park DongHa (luncliff@gmail.com)
+ */
 #include <graphics.h>
 #include <spdlog/spdlog.h>
 #if __has_include(<EGL/eglext_angle.h>)
@@ -26,10 +29,10 @@ EGLint report_egl_error(gsl::czstring<> fname, EGLint ec = eglGetError()) {
     return ec;
 }
 
-context_t::context_t(EGLContext share_context) noexcept {
+egl_context_t::egl_context_t(EGLDisplay display, EGLContext share_context) noexcept {
     spdlog::debug(__FUNCTION__);
-    // acquire EGLDisplay
-    display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    // remember the EGLDisplay
+    this->display = display;
     EGLint version[2]{};
     if (eglInitialize(display, version + 0, version + 1) == false) {
         report_egl_error("eglInitialize", eglGetError());
@@ -52,16 +55,16 @@ context_t::context_t(EGLContext share_context) noexcept {
         spdlog::debug("EGL create: context {} {}", context, share_context);
 }
 
-bool context_t::is_valid() const noexcept {
+bool egl_context_t::is_valid() const noexcept {
     return context != EGL_NO_CONTEXT;
 }
 
-context_t::~context_t() noexcept {
+egl_context_t::~egl_context_t() noexcept {
     spdlog::debug(__FUNCTION__);
     terminate();
 }
 
-EGLint context_t::resume(gsl::not_null<EGLNativeWindowType> window) noexcept {
+EGLint egl_context_t::resume(gsl::not_null<EGLNativeWindowType> window) noexcept {
     spdlog::trace(__FUNCTION__);
     if (context == EGL_NO_CONTEXT)
         return EGL_NOT_INITIALIZED;
@@ -85,7 +88,7 @@ EGLint context_t::resume(gsl::not_null<EGLNativeWindowType> window) noexcept {
     return EGL_SUCCESS;
 }
 
-EGLint context_t::suspend() noexcept {
+EGLint egl_context_t::suspend() noexcept {
     spdlog::trace(__FUNCTION__);
     if (context == EGL_NO_CONTEXT)
         return EGL_NOT_INITIALIZED;
@@ -107,7 +110,7 @@ EGLint context_t::suspend() noexcept {
     return EGL_SUCCESS;
 }
 
-void context_t::terminate() noexcept {
+void egl_context_t::terminate() noexcept {
     spdlog::trace(__FUNCTION__);
     if (display == EGL_NO_DISPLAY) // already terminated
         return;
@@ -132,14 +135,16 @@ void context_t::terminate() noexcept {
             report_egl_error("eglDestroySurface", eglGetError());
         surface = EGL_NO_SURFACE;
     }
-    // terminate EGL
-    spdlog::warn("EGL terminate: {}", display);
-    if (eglTerminate(display) == EGL_FALSE)
-        report_egl_error("eglTerminate", eglGetError());
+    // @todo EGLDisplay's lifecycle can be managed outside of this class.
+    //       it had better forget about it rather than `eglTerminate`
+    //// terminate EGL
+    //spdlog::warn("EGL terminate: {}", display);
+    //if (eglTerminate(display) == EGL_FALSE)
+    //    report_egl_error("eglTerminate", eglGetError());
     display = EGL_NO_DISPLAY;
 }
 
-EGLint context_t::swap() noexcept {
+EGLint egl_context_t::swap() noexcept {
     if (eglSwapBuffers(display, surface))
         return EGL_SUCCESS;
     switch (const auto ec = eglGetError()) {
@@ -151,7 +156,7 @@ EGLint context_t::swap() noexcept {
     }
 }
 
-EGLint context_t::get_configs(EGLDisplay display, EGLConfig* configs, EGLint& count) noexcept {
+EGLint egl_context_t::get_configs(EGLDisplay display, EGLConfig* configs, EGLint& count) noexcept {
     // clang-format off
     //constexpr auto color_size = 8;
     //constexpr auto depth_size = 24;

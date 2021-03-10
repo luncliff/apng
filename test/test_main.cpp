@@ -1,3 +1,6 @@
+/**
+ * @author Park DongHa (luncliff@gmail.com)
+ */
 //#define CATCH_CONFIG_MAIN
 //#define CATCH_CONFIG_WINDOWS_CRTDBG
 #define CATCH_CONFIG_RUNNER

@@ -1,6 +1,5 @@
 /**
- * @file graphics.h
- * @author github.com/luncliff (luncliff@gmail.com)
+ * @author Park DongHa (luncliff@gmail.com)
  */
 #pragma once
 #include <gsl/gsl>
@@ -10,39 +9,31 @@
 #include <memory_resource>
 #include <string_view>
 #include <system_error>
-
+// clang-format off
 #if __has_include(<vulkan/vulkan.h>)
-#include <vulkan/vulkan.h>
+#  include <vulkan/vulkan.h>
 #endif
-
-#define GL_GLEXT_PROTOTYPES
-#define EGL_EGLEXT_PROTOTYPES
 #if __has_include(<QtOpenGL/qgl.h>) // from Qt5::OpenGL
-// #define GL_GLEXT_PROTOTYPES
-#include <QtOpenGL/qglfunctions.h>
-// #define EGL_EGLEXT_PROTOTYPES
-#include <QtANGLE/EGL/egl.h>
-#include <QtANGLE/EGL/eglext.h>
-#include <QtANGLE/EGL/eglext_angle.h>
-
+#  include <QtOpenGL/qglfunctions.h>
+#  include <QtANGLE/EGL/egl.h>
+#  include <QtANGLE/EGL/eglext.h>
+#  include <QtANGLE/EGL/eglext_angle.h>
 #elif __has_include(<angle_gl.h>) // from google/ANGLE
-#include <angle_gl.h>
-#if __has_include(<angle_windowsstore.h>)
-#include <angle_windowsstore.h>
-#endif
-#define EGL_EGLEXT_PROTOTYPES
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
-
+#  include <angle_gl.h>
+#  if __has_include(<angle_windowsstore.h>)
+#    include <angle_windowsstore.h>
+#  endif
+#  include <EGL/egl.h>
+#  include <EGL/eglext.h>
 #else
-#define GL_GLEXT_PROTOTYPES
-#include <GLES3/gl3.h>
-#if __has_include(<GLES3/gl31.h>)
-#include <GLES3/gl31.h>
+#  include <GLES3/gl3.h>
+#  if __has_include(<GLES3/gl31.h>)
+#    include <GLES3/gl31.h>
+#  endif
+#  include <EGL/egl.h>
+#  include <EGL/eglext.h>
 #endif
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
-#endif
+// clang-format on
 
 /**
  * @brief `std::error_category` for `std::system_error` in this module
@@ -51,9 +42,9 @@
  */
 std::error_category& get_opengl_category() noexcept;
 
-class context_t final {
+class egl_context_t final {
   private:
-    gsl::owner<EGLDisplay> display = EGL_NO_DISPLAY;
+    gsl::owner<EGLDisplay> display = EGL_NO_DISPLAY; // this will be EGL_NO_DISPLAY when `terminate`d
     uint16_t major = 0, minor = 0;
     gsl::owner<EGLContext> context = EGL_NO_CONTEXT;
     EGLConfig configs[3]{};
@@ -64,19 +55,20 @@ class context_t final {
   public:
     /**
      * @brief Acquire EGLDisplay and create an EGLContext for OpenGL ES 3.0+
-     * @see eglInitialize
+     * 
+     * @see eglInitialize https://www.khronos.org/registry/EGL/sdk/docs/man/html/eglInitialize.xhtml
      * @see eglChooseConfig
      * @see eglCreateContext
      */
-    explicit context_t(EGLContext share_context) noexcept;
+    egl_context_t(EGLDisplay display, EGLContext share_context) noexcept;
     /**
      * @see terminate
      */
-    ~context_t() noexcept;
-    context_t(context_t const&) = delete;
-    context_t& operator=(context_t const&) = delete;
-    context_t(context_t&&) = delete;
-    context_t& operator=(context_t&&) = delete;
+    ~egl_context_t() noexcept;
+    egl_context_t(egl_context_t const&) = delete;
+    egl_context_t& operator=(egl_context_t const&) = delete;
+    egl_context_t(egl_context_t&&) = delete;
+    egl_context_t& operator=(egl_context_t&&) = delete;
 
     /**
      * @brief EGLContext == NULL?
@@ -89,6 +81,11 @@ class context_t final {
      * @brief Destroy all EGL bindings and resources
      * @note This functions in invoked in the destructor
      * @post is_valid() == false
+     * 
+     * @see eglMakeCurrent
+     * @see eglDestroyContext
+     * @see eglDestroySurface
+     * @see eglTerminate(unused) https://www.khronos.org/registry/EGL/sdk/docs/man/html/eglTerminate.xhtml
      */
     void terminate() noexcept;
 

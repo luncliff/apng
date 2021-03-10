@@ -27,7 +27,6 @@ PROPERTIES
     PUBLIC_HEADER include/graphics.h
 )
 
-find_package(Vulkan)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Microsoft.GSL CONFIG REQUIRED)
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
@@ -60,12 +59,6 @@ PUBLIC
     Microsoft::DirectXTK Microsoft::DirectXTex
     windowsapp windowscodecs
 )
-if(Vulkan_FOUND)
-    target_link_libraries(graphics
-    PUBLIC
-        Vulkan::Vulkan
-    )
-endif()
 
 target_link_options(graphics
 PRIVATE
@@ -83,6 +76,7 @@ PRIVATE
 target_compile_definitions(graphics
 PUBLIC
     WIN32_LEAN_AND_MEAN NOMINMAX
+    GL_GLEXT_PROTOTYPES EGL_EGLEXT_PROTOTYPES
 )
 
 if(DEFINED ENV{Qt5_DIR} OR DEFINED Qt5_DIR)
@@ -98,6 +92,7 @@ if(DEFINED ENV{Qt5_DIR} OR DEFINED Qt5_DIR)
     message(STATUS "Copied QtANGLE: ${CMAKE_BINARY_DIR}, ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}")
 
 else()
+    message(STATUS "Using ANGLE: ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
     find_package(unofficial-angle CONFIG REQUIRED)
     target_link_libraries(graphics
     PUBLIC
@@ -106,22 +101,29 @@ else()
 
 endif()
 
-# find_package(glslang CONFIG REQUIRED)
-# find_program(glslc_path
-#     NAMES   glslc.exe glslc
-#     PATHS   ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools
-#     # NO_DEFAULT_PATH 
-# )
-# file(RELATIVE_PATH short_path ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET} ${glslc_path})
-# message(STATUS "using glslc: ${glslc_path}")
-# add_custom_target(compile_shaders_glsl
-#     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/assets
-#     COMMAND     ${glslc_path} --version
-#     COMMAND     ${glslc_path} sample.vert -o sample_vert.spv
-#     COMMAND     ${glslc_path} bypass.frag -o sample_frag.spv
-#     COMMAND     ${glslc_path} bypass.frag         -o bypass_frag.spv
-#     COMMAND     ${glslc_path} sample_uniform.vert -o sample_uniform_vert.spv
-# )
+find_package(Vulkan)
+if(Vulkan_FOUND)
+    target_link_libraries(graphics
+    PUBLIC
+        Vulkan::Vulkan
+    )
+    # find_package(glslang CONFIG REQUIRED)
+    find_program(glslc_path
+        NAMES   glslc.exe glslc
+        PATHS   ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools
+        # NO_DEFAULT_PATH 
+    )
+    file(RELATIVE_PATH short_path ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET} ${glslc_path})
+    message(STATUS "using glslc: ${glslc_path}")
+    add_custom_target(compile_shaders_glsl
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/assets
+        COMMAND     ${glslc_path} --version
+        COMMAND     ${glslc_path} sample.vert -o sample_vert.spv
+        COMMAND     ${glslc_path} bypass.frag -o sample_frag.spv
+        COMMAND     ${glslc_path} bypass.frag         -o bypass_frag.spv
+        COMMAND     ${glslc_path} sample_uniform.vert -o sample_uniform_vert.spv
+    )
+endif()
 
 enable_testing()
 find_package(glfw3 3.3 CONFIG REQUIRED)
@@ -134,9 +136,14 @@ add_executable(graphics_test_suite
     # test/test_vulkan_pipeline.cpp
     # test/test_vulkan_descriptor_set.cpp
     test/test_opengl_es.cpp
-    test/test_qt5.cpp
     test/test_directx.cpp
 )
+if(QtANGLE_FOUND)
+    target_sources(graphics_test_suite
+    PRIVATE
+        test/test_qt5.cpp
+    )
+endif()
 # add_dependencies(graphics_test_suite compile_shaders_glsl)
 
 set_target_properties(graphics_test_suite

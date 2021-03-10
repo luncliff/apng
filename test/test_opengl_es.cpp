@@ -1,4 +1,5 @@
 /**
+ * @author Park DongHa (luncliff@gmail.com)
  * @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLSyncControlTest.cpp
  * @see https://github.com/google/angle/blob/master/util/windows/win32/Win32Window.cpp 
  */
@@ -150,7 +151,8 @@ TEST_CASE("EGLContext helper with Console", "[egl][!mayfail]") {
     auto handle = get_hwnd_for_console();
     if (handle == NULL)
         FAIL("Faild to find HWND from console name");
-    context_t context{EGL_NO_CONTEXT};
+
+    egl_context_t context{eglGetDisplay(EGL_DEFAULT_DISPLAY), EGL_NO_CONTEXT};
     REQUIRE(context.is_valid());
     // we can't draw on console window.
     // for some reason ANGLE returns EGL_SUCCESS for this case ...
@@ -158,24 +160,146 @@ TEST_CASE("EGLContext helper with Console", "[egl][!mayfail]") {
     REQUIRE(context.suspend() == EGL_SUCCESS);
 }
 
-auto create_opengl_window(gsl::czstring<> window_name) noexcept -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>;
+// @todo Change to WinRT (or WinUI?)
+struct win32_window_helper_t final {
+    HINSTANCE instance;
+    HWND window;
+    WNDCLASSEXW winclass;
+    DEVMODEW mode;
 
-auto start_opengl_test() -> gsl::final_action<void (*)()> {
-    REQUIRE(glfwInit());
-    return gsl::finally(&glfwTerminate);
+  public:
+    static LRESULT CALLBACK on_key_msg(HWND hwnd, UINT umsg, //
+                                       WPARAM wparam, LPARAM lparam) {
+        switch (umsg) {
+        case WM_KEYDOWN:
+        case WM_KEYUP:
+            return 0;
+        default:
+            return DefWindowProc(hwnd, umsg, wparam, lparam);
+        }
+    }
+
+    static LRESULT CALLBACK on_wnd_msg(HWND hwnd, UINT umsg, //
+                                       WPARAM wparam, LPARAM lparam) {
+        switch (umsg) {
+        case WM_DESTROY:
+        case WM_CLOSE:
+            PostQuitMessage(EXIT_SUCCESS); // == 0
+            return 0;
+        default:
+            return on_key_msg(hwnd, umsg, wparam, lparam);
+        }
+    }
+
+  public:
+    explicit win32_window_helper_t(HINSTANCE happ = GetModuleHandleW(NULL), LPCWSTR class_name = L"----")
+        : instance{happ}, window{}, winclass{}, mode{} {
+        // Setup the windows class with default settings.
+        winclass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
+        winclass.lpfnWndProc = on_wnd_msg;
+        winclass.cbWndExtra = winclass.cbClsExtra = 0;
+        winclass.hInstance = happ;
+        winclass.hCursor = LoadCursor(NULL, IDC_ARROW);
+        winclass.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+        winclass.lpszMenuName = NULL;
+        winclass.lpszClassName = class_name;
+        winclass.cbSize = sizeof(WNDCLASSEXW);
+        RegisterClassExW(&winclass);
+
+        int posX = 0, posY = 0;
+        auto screenWidth = 100 * 16, screenHeight = 100 * 9;
+        // fullscreen: maximum size of the users desktop and 32bit
+        if (true) {
+            mode.dmSize = sizeof(mode);
+            mode.dmPelsWidth = GetSystemMetrics(SM_CXSCREEN);
+            mode.dmPelsHeight = GetSystemMetrics(SM_CYSCREEN);
+            mode.dmBitsPerPel = 32;
+            mode.dmFields = DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT;
+            // Change the display settings to full screen.
+            ChangeDisplaySettingsW(&mode, CDS_FULLSCREEN);
+        }
+
+        // Create the window with the screen settings and get the handle to it.
+        this->window = CreateWindowExW(WS_EX_APPWINDOW, winclass.lpszClassName, winclass.lpszClassName,
+                                       WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_POPUP, posX, posY, screenWidth,
+                                       screenHeight, NULL, NULL, happ, NULL);
+        // Bring the window up on the screen and set it as main focus.
+        ShowWindow(this->window, SW_SHOW);
+        SetForegroundWindow(this->window);
+        SetFocus(this->window);
+        ShowCursor(true);
+    }
+    ~win32_window_helper_t() {
+        DestroyWindow(this->window);
+        UnregisterClassW(this->winclass.lpszClassName, nullptr);
+    }
+
+    bool consume_message(MSG& msg) {
+        if (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+        return msg.message != WM_QUIT;
+    }
+
+    // https://github.com/svenpilz/egl_offscreen_opengl/blob/master/egl_opengl_test.cpp
+    uintptr_t run(win32_window_helper_t& app, EGLDisplay display, EGLSurface surface) noexcept(false) {
+        MSG msg{};
+        while (consume_message(msg)) {
+            SleepEx(10, TRUE);
+            glClearColor(37.0f / 255, 27.0f / 255, 82.0f / 255, 1);
+            glClear(GL_COLOR_BUFFER_BIT);
+            // ...
+            if (eglSwapBuffers(display, surface) == false)
+                throw std::runtime_error{"eglSwapBuffers(mDisplay, mSurface"};
+        }
+        return msg.wParam;
+    }
+};
+
+TEST_CASE("EGLContext helper with Win32 HINSTANCE", "[egl][windows]") {
+    win32_window_helper_t helper{};
+    REQUIRE(helper.window);
+    REQUIRE(eglGetCurrentContext() == EGL_NO_CONTEXT);
+
+    egl_context_t context{eglGetDisplay(EGL_DEFAULT_DISPLAY), EGL_NO_CONTEXT};
+    REQUIRE(context.is_valid());
+    REQUIRE(context.resume(helper.window) == EGL_SUCCESS);
+
+    SECTION("GetString") {
+        spdlog::info("OpenGL(EGL_DEFAULT_DISPLAY):");
+        spdlog::info("  GL_VERSION: {:s}", glGetString(GL_VERSION));
+        spdlog::info("  GL_VENDOR: {:s}", glGetString(GL_VENDOR));
+        spdlog::info("  GL_RENDERER: {:s}", glGetString(GL_RENDERER));
+        spdlog::info("  GL_SHADING_LANGUAGE_VERSION: {:s}", glGetString(GL_SHADING_LANGUAGE_VERSION));
+        REQUIRE(glGetError() == GL_NO_ERROR);
+    }
 }
 
-TEST_CASE("GLFW + OpenGL ES", "[opengl][glfw]") {
-    auto on_return = start_opengl_test();
-    auto window = create_opengl_window("GLFW3");
-    if (window == nullptr) {
-        const char* message = nullptr;
-        glfwGetError(&message);
-        FAIL(message);
-    }
-    glfwMakeContextCurrent(window.get());
+auto start_opengl_test() -> gsl::final_action<void (*)()>;
+auto create_opengl_window(gsl::czstring<> window_name, GLint width, GLint height) noexcept
+    -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>;
 
-    CAPTURE(glGetString(GL_VERSION), glGetString(GL_SHADING_LANGUAGE_VERSION));
+struct glfw_test_case {
+  protected:
+    gsl::final_action<void (*)()> on_cleanup = start_opengl_test();
+    std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)> window{nullptr, nullptr};
+
+  public:
+    glfw_test_case() {
+        window = create_opengl_window("GLFW3", 800, 800);
+        if (window == nullptr) {
+            const char* message = nullptr;
+            glfwGetError(&message);
+            FAIL(message);
+        }
+    }
+};
+
+TEST_CASE_METHOD(glfw_test_case, "GLFW + OpenGL ES", "[opengl][glfw]") {
+    glfwMakeContextCurrent(window.get());
+    REQUIRE(eglGetDisplay(EGL_DEFAULT_DISPLAY) == eglGetCurrentDisplay());
+
     SECTION("poll event / swap buffer") {
         auto repeat = 120;
         while (glfwWindowShouldClose(window.get()) == false && repeat--) {
@@ -189,19 +313,12 @@ TEST_CASE("GLFW + OpenGL ES", "[opengl][glfw]") {
     }
 }
 
-TEST_CASE("EGLContext helper with GLFW", "[egl][glfw]") {
-    auto on_return = start_opengl_test();
-    auto window = create_opengl_window("GLFW3");
-    if (window == nullptr) {
-        const char* message = nullptr;
-        glfwGetError(&message);
-        FAIL(message);
-    }
+TEST_CASE_METHOD(glfw_test_case, "EGLContext helper with GLFW", "[egl][glfw]") {
     glfwMakeContextCurrent(window.get());
     REQUIRE(glfwGetWin32Window(window.get()));
 
     GIVEN("separate EGLContext") {
-        context_t context{EGL_NO_CONTEXT};
+        egl_context_t context{glfwGetEGLDisplay(), glfwGetEGLContext(window.get())};
         REQUIRE(context.is_valid());
 
         WHEN("create EGLSurface and MakeCurrent")
@@ -211,10 +328,9 @@ TEST_CASE("EGLContext helper with GLFW", "[egl][glfw]") {
         }
     }
     GIVEN("shared EGLContext") {
-        EGLContext shared_context = eglGetCurrentContext();
-        REQUIRE(shared_context != EGL_NO_CONTEXT);
-
-        context_t context{shared_context};
+        EGLContext shared_context = glfwGetEGLContext(window.get());
+        REQUIRE(shared_context == eglGetCurrentContext());
+        egl_context_t context{glfwGetEGLDisplay(), shared_context};
         REQUIRE(context.is_valid());
 
         WHEN("create EGLSurface and MakeCurrent")
@@ -226,14 +342,7 @@ TEST_CASE("EGLContext helper with GLFW", "[egl][glfw]") {
 }
 
 /// @see https://docs.gl/
-TEST_CASE("GLFW info", "[glfw]") {
-    auto on_return = start_opengl_test();
-    auto window = create_opengl_window("GLFW3");
-    if (window == nullptr) {
-        const char* message = nullptr;
-        glfwGetError(&message);
-        FAIL(message);
-    }
+TEST_CASE_METHOD(glfw_test_case, "GLFW info", "[glfw]") {
     glfwMakeContextCurrent(window.get());
 
     SECTION("GetString") {
@@ -273,131 +382,8 @@ TEST_CASE("GLFW info", "[glfw]") {
     }
 }
 
-struct app_context_t final {
-    HINSTANCE instance;
-    HWND window;
-    WNDCLASSEXW winclass;
-    DEVMODEW mode;
-
-  public:
-    static LRESULT CALLBACK on_key_msg(HWND hwnd, UINT umsg, //
-                                       WPARAM wparam, LPARAM lparam) {
-        switch (umsg) {
-        case WM_KEYDOWN:
-        case WM_KEYUP:
-            return 0;
-        default:
-            return DefWindowProc(hwnd, umsg, wparam, lparam);
-        }
-    }
-
-    static LRESULT CALLBACK on_wnd_msg(HWND hwnd, UINT umsg, //
-                                       WPARAM wparam, LPARAM lparam) {
-        switch (umsg) {
-        case WM_DESTROY:
-        case WM_CLOSE:
-            PostQuitMessage(EXIT_SUCCESS); // == 0
-            return 0;
-        default:
-            return on_key_msg(hwnd, umsg, wparam, lparam);
-        }
-    }
-
-  public:
-    explicit app_context_t(HINSTANCE happ, LPCWSTR class_name = L"----")
-        : instance{happ}, window{}, winclass{}, mode{} {
-        // Setup the windows class with default settings.
-        winclass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-        winclass.lpfnWndProc = on_wnd_msg;
-        winclass.cbWndExtra = winclass.cbClsExtra = 0;
-        winclass.hInstance = happ;
-        winclass.hCursor = LoadCursor(NULL, IDC_ARROW);
-        winclass.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
-        winclass.lpszMenuName = NULL;
-        winclass.lpszClassName = class_name;
-        winclass.cbSize = sizeof(WNDCLASSEXW);
-        RegisterClassExW(&winclass);
-
-        int posX = 0, posY = 0;
-        auto screenWidth = 100 * 16, screenHeight = 100 * 9;
-        // fullscreen: maximum size of the users desktop and 32bit
-        if (true) {
-            mode.dmSize = sizeof(mode);
-            mode.dmPelsWidth = GetSystemMetrics(SM_CXSCREEN);
-            mode.dmPelsHeight = GetSystemMetrics(SM_CYSCREEN);
-            mode.dmBitsPerPel = 32;
-            mode.dmFields = DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT;
-            // Change the display settings to full screen.
-            ChangeDisplaySettingsW(&mode, CDS_FULLSCREEN);
-        }
-
-        // Create the window with the screen settings and get the handle to it.
-        this->window = CreateWindowExW(WS_EX_APPWINDOW, winclass.lpszClassName, winclass.lpszClassName,
-                                       WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_POPUP, posX, posY, screenWidth,
-                                       screenHeight, NULL, NULL, happ, NULL);
-        // Bring the window up on the screen and set it as main focus.
-        ShowWindow(this->window, SW_SHOW);
-        SetForegroundWindow(this->window);
-        SetFocus(this->window);
-        ShowCursor(true);
-    }
-    ~app_context_t() {
-        DestroyWindow(this->window);
-        UnregisterClassW(this->winclass.lpszClassName, nullptr);
-    }
-
-    bool consume_message(MSG& msg) {
-        if (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-        return msg.message != WM_QUIT;
-    }
-
-    // https://github.com/svenpilz/egl_offscreen_opengl/blob/master/egl_opengl_test.cpp
-    uintptr_t run(app_context_t& app, EGLDisplay display, EGLSurface surface) noexcept(false) {
-        MSG msg{};
-        while (consume_message(msg)) {
-            SleepEx(10, TRUE);
-            glClearColor(37.0f / 255, 27.0f / 255, 82.0f / 255, 1);
-            glClear(GL_COLOR_BUFFER_BIT);
-            // ...
-            if (eglSwapBuffers(display, surface) == false)
-                throw std::runtime_error{"eglSwapBuffers(mDisplay, mSurface"};
-        }
-        return msg.wParam;
-    }
-};
-
-TEST_CASE("EGLContext helper with Win32 HINSTANCE", "[egl][windows]") {
-    app_context_t app{GetModuleHandleW(NULL)};
-    REQUIRE(app.instance);
-    REQUIRE(app.window);
-    REQUIRE(eglGetCurrentContext() == EGL_NO_CONTEXT);
-
-    context_t context{EGL_NO_CONTEXT};
-    REQUIRE(context.is_valid());
-    REQUIRE(context.resume(app.window) == EGL_SUCCESS);
-
-    SECTION("GetString") {
-        spdlog::info("OpenGL(EGL_DEFAULT_DISPLAY):");
-        spdlog::info("  GL_VERSION: {:s}", glGetString(GL_VERSION));
-        spdlog::info("  GL_VENDOR: {:s}", glGetString(GL_VENDOR));
-        spdlog::info("  GL_RENDERER: {:s}", glGetString(GL_RENDERER));
-        spdlog::info("  GL_SHADING_LANGUAGE_VERSION: {:s}", glGetString(GL_SHADING_LANGUAGE_VERSION));
-        REQUIRE(glGetError() == GL_NO_ERROR);
-    }
-}
-
 // see https://www.roxlu.com/2014/048/fast-pixel-transfers-with-pixel-buffer-objects
-TEST_CASE("PixelBufferObject", "[opengl][glfw]") {
-    auto on_return = start_opengl_test();
-    auto window = create_opengl_window("GLFW3");
-    if (window == nullptr) {
-        const char* message = nullptr;
-        glfwGetError(&message);
-        FAIL(message);
-    }
+TEST_CASE_METHOD(glfw_test_case, "PixelBufferObject", "[opengl][glfw]") {
     glfwMakeContextCurrent(window.get());
     GLint w = 0, h = 0;
     glfwGetFramebufferSize(window.get(), &w, &h);
@@ -540,10 +526,16 @@ TEST_CASE("OpenGL readback_t", "[opengl][glfw]") {
 }
 #endif
 
+auto start_opengl_test() -> gsl::final_action<void (*)()> {
+    REQUIRE(glfwInit());
+    return gsl::finally(&glfwTerminate);
+}
+
 /**
  * @see https://www.glfw.org/docs/latest/window_guide.html#GLFW_CONTEXT_CREATION_API_hint
  */
-auto create_opengl_window(gsl::czstring<> window_name) noexcept -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)> {
+auto create_opengl_window(gsl::czstring<> window_name, GLint width, GLint height) noexcept
+    -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)> {
 #if defined(__APPLE__)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API); // OpenGL
     glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
@@ -566,7 +558,6 @@ auto create_opengl_window(gsl::czstring<> window_name) noexcept -> std::unique_p
 #endif // defined(GLFW_INCLUDE_ES2) || defined(GLFW_INCLUDE_ES3)
 #endif // __APPLE__ || _WIN32
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    const auto axis = 160 * 5;
-    return std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>{glfwCreateWindow(axis, axis, window_name, NULL, NULL),
+    return std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>{glfwCreateWindow(width, height, window_name, NULL, NULL),
                                                               &glfwDestroyWindow};
 }

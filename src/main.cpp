@@ -1,3 +1,6 @@
+/**
+ * @author Park DongHa (luncliff@gmail.com)
+ */
 #include <graphics.h>
 
 namespace fs = std::filesystem;

@@ -1,3 +1,6 @@
+/**
+ * @author Park DongHa (luncliff@gmail.com)
+ */
 #include <graphics.h>
 
 GLuint create_compile_attach(GLuint program, GLenum shader_type, std::string_view code) noexcept(false);

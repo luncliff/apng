@@ -1,4 +1,5 @@
 /**
+ * @author Park DongHa (luncliff@gmail.com)
  * @see https://github.com/microsoft/angle/wiki
  * @see https://github.com/microsoft/DirectXTK/wiki/Getting-Started
  */
@@ -43,15 +44,23 @@ class ID3D11DeviceTestCase1 {
     com_ptr<ID3D11DeviceContext> device_context{};
 };
 
-TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_9_3", "[directx]") {
-    D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_9_3;
-    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
+TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_0(D3D_DRIVER_TYPE_REFERENCE)", "[directx][!mayfail]") {
+    D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
+    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_REFERENCE, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
     REQUIRE(device);
     REQUIRE(device->GetFeatureLevel() == level);
 }
 
-TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_10_1", "[directx]") {
+TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_0(D3D_DRIVER_TYPE_NULL)", "[directx][!mayfail]") {
+    D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
+    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_NULL, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
+                              D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
+    REQUIRE(device);
+    REQUIRE(device->GetFeatureLevel() == level);
+}
+
+TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_10_1(D3D_DRIVER_TYPE_HARDWARE)", "[directx][!mayfail]") {
     D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_10_1;
     REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
@@ -59,7 +68,7 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_10_1", "[directx]") {
     REQUIRE(device->GetFeatureLevel() == level);
 }
 
-TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_1", "[directx]") {
+TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_1(D3D_DRIVER_TYPE_HARDWARE)", "[directx][!mayfail]") {
     D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_1;
     REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
@@ -122,14 +131,21 @@ void make_client_egl_surface(EGLDisplay display, EGLConfig config, ID3D11Texture
     REQUIRE(resource->GetSharedHandle(&handle) == S_OK);
     D3D11_TEXTURE2D_DESC desc{};
     texture->GetDesc(&desc);
-    EGLint attrs[]{EGL_WIDTH,      desc.Width,         EGL_HEIGHT,       desc.Height, EGL_TEXTURE_TARGET,
-                   EGL_TEXTURE_2D, EGL_TEXTURE_FORMAT, EGL_TEXTURE_RGBA, EGL_NONE};
+    EGLint attrs[]{EGL_WIDTH,
+                   gsl::narrow_cast<EGLint>(desc.Width),
+                   EGL_HEIGHT,
+                   gsl::narrow_cast<EGLint>(desc.Height),
+                   EGL_TEXTURE_TARGET,
+                   EGL_TEXTURE_2D,
+                   EGL_TEXTURE_FORMAT,
+                   EGL_TEXTURE_RGBA,
+                   EGL_NONE};
     surface = eglCreatePbufferFromClientBuffer(display, EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE, handle, config, attrs);
     if (surface == EGL_NO_SURFACE)
         FAIL(eglGetError());
 }
 
-TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx]") {
+TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx][!mayfail]") {
     D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
     REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, //
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
@@ -145,7 +161,7 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx
     auto on_return = gsl::finally([release_device, es_device]() { REQUIRE(release_device(es_device)); });
 
     SECTION("eglGetPlatformDisplayEXT") {
-        EGLDisplay es_display = EGL_NO_CONFIG_KHR;
+        EGLDisplay es_display = EGL_NO_DISPLAY;
         make_egl_display(es_device, es_display);
         REQUIRE(eglTerminate(es_display));
     }
@@ -209,7 +225,7 @@ fs::path get_asset_dir() noexcept;
 
 // see https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_usage#resource-usage-restrictions
 // see https://docs.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11device-createtexture2d#remarks
-TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D(D3D11_USAGE_DYNAMIC)", "[directx][texture]") {
+TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D(D3D11_USAGE_DYNAMIC)", "[directx][!mayfail][texture]") {
     com_ptr<ID3D11Texture2D> texture{};
     D3D11_TEXTURE2D_DESC desc{};
     desc.Width = desc.Height = 500;
@@ -252,7 +268,7 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D(D3D11_USAGE_DYNAMIC)
     device_context->Unmap(texture.get(), 0);
 }
 
-SCENARIO_METHOD(ID3D11Texture2DTestCase1, "IWICBitmapDecoder", "[directx][file]") {
+SCENARIO_METHOD(ID3D11Texture2DTestCase1, "IWICBitmapDecoder", "[directx][!mayfail][file]") {
     GIVEN("image/png") {
         const auto fpath = get_asset_dir() / "image_1080_608.png";
         REQUIRE(fs::exists(fpath));
@@ -285,7 +301,7 @@ SCENARIO_METHOD(ID3D11Texture2DTestCase1, "IWICBitmapDecoder", "[directx][file]"
     }
 }
 
-SCENARIO_METHOD(ID3D11Texture2DTestCase1, "CreateWICTextureFromFile", "[directx][file]") {
+SCENARIO_METHOD(ID3D11Texture2DTestCase1, "CreateWICTextureFromFile", "[directx][!mayfail][file]") {
     GIVEN("image/png") {
         const auto fpath = get_asset_dir() / "image_1080_608.png";
         REQUIRE(fs::exists(fpath));
@@ -339,7 +355,7 @@ HRESULT make_test_texture2D(ID3D11Device* device, D3D11_TEXTURE2D_DESC& info, ID
 }
 
 /// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLPresentPathD3D11Test.cpp
-TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D to EGLImage", "[directx][egl][!mayfail]") {
+TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D to EGLImage", "[directx][!mayfail][egl][!mayfail]") {
     D3D11_TEXTURE2D_DESC info{};
     com_ptr<ID3D11Texture2D> texture{};
     REQUIRE(make_test_texture2D(device.get(), info, texture.put()) == S_OK);
@@ -355,7 +371,7 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D to EGLImage", "[dire
     make_egl_display(es_device, es_display);
     auto on_return_2 = gsl::finally([es_display]() { REQUIRE(eglTerminate(es_display)); });
 
-    EGLConfig es_config = EGL_NO_CONFIG_KHR;
+    EGLConfig es_config{};
     make_egl_config(es_display, es_config);
 
     EGLSurface es_surface = EGL_NO_SURFACE;
