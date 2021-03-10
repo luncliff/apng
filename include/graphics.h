@@ -13,11 +13,14 @@
 #if __has_include(<vulkan/vulkan.h>)
 #  include <vulkan/vulkan.h>
 #endif
+
 #if __has_include(<QtOpenGL/qgl.h>) // from Qt5::OpenGL
+#  include <QtOpenGL/qgl.h>
 #  include <QtOpenGL/qglfunctions.h>
+#  include <QtANGLE/GLES3/gl3.h>
 #  include <QtANGLE/EGL/egl.h>
 #  include <QtANGLE/EGL/eglext.h>
-#  include <QtANGLE/EGL/eglext_angle.h>
+//#  include <QtANGLE/EGL/eglext_angle.h>
 #elif __has_include(<angle_gl.h>) // from google/ANGLE
 #  include <angle_gl.h>
 #  if __has_include(<angle_windowsstore.h>)

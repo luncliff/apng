@@ -197,19 +197,9 @@ HRESULT make_device_and_context(ID3D11Device** device, ID3D11DeviceContext** con
         REQUIRE(adapter->GetDesc(&info) == S_OK);
         break; // take the first one
     }
-    return D3D11CreateDevice(
-        adapter.get(), adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE, //
-        NULL, D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-        nullptr, 0, //
-        D3D11_SDK_VERSION, device, &level, context);
-}
-
-// Will this TC success on AppVeyor?
-TEST_CASE("D3D11CreateDevice(D3D_FEATURE_LEVEL_11_0)", "[directx][!mayfail]") {
-    com_ptr<ID3D11Device> device{};
-    com_ptr<ID3D11DeviceContext> device_context{};
-    D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
-    REQUIRE(make_device_and_context(device.put(), device_context.put(), level) == S_OK);
+    return D3D11CreateDevice(adapter.get(), adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE,             //
+                             NULL, D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
+                             D3D11_SDK_VERSION, device, &level, context);
 }
 
 class ID3D11Texture2DTestCase1 {
@@ -223,9 +213,8 @@ class ID3D11Texture2DTestCase1 {
     ID3D11Texture2DTestCase1() noexcept(false) {
         REQUIRE(CoCreateInstance(CLSID_WICImagingFactory, NULL, //
                                  CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.put())) == S_OK);
-        REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL,
-                                  D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
-                                  D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
+        if (auto hr = make_device_and_context(device.put(), device_context.put(), level))
+            FAIL(hr);
     }
 };
 
@@ -264,13 +253,13 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D(D3D11_USAGE_DYNAMIC)
     REQUIRE(mapping.pData);
     switch (desc.Format) {
     case DXGI_FORMAT_R8G8B8A8_UNORM:
-        REQUIRE(mapping.RowPitch == 512 * 4); // aligned in 16 bytes
+        REQUIRE(mapping.RowPitch == 500 * 4); // the region is aligned in 16 bytes
         break;
     case DXGI_FORMAT_NV12:
-        REQUIRE(mapping.RowPitch == 512);
+        REQUIRE(mapping.RowPitch == 500);
         break;
     case DXGI_FORMAT_YUY2:
-        REQUIRE(mapping.RowPitch == 512 * 2);
+        REQUIRE(mapping.RowPitch == 500 * 2);
         break;
     }
     device_context->Unmap(texture.get(), 0);

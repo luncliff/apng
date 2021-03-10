@@ -44,7 +44,8 @@ class EGLConfigTestCase2 {
     }
     ~EGLConfigTestCase2() {
         REQUIRE(eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT));
-        REQUIRE(eglTerminate(display));
+        if (display != eglGetDisplay(EGL_DEFAULT_DISPLAY))
+            REQUIRE(eglTerminate(display));
     }
 };
 
@@ -60,15 +61,15 @@ void print1(EGLDisplay display, EGLConfig config) {
         spdlog::info("    {}: {}", #attribute, value);                                                                 \
         value = 0;                                                                                                     \
     }
-    PRINT_IF_SUPPORTED(EGL_CONFIG_CAVEAT)
-    PRINT_IF_SUPPORTED(EGL_NATIVE_VISUAL_ID)
-    PRINT_IF_SUPPORTED(EGL_NATIVE_VISUAL_TYPE)
+    //PRINT_IF_SUPPORTED(EGL_CONFIG_CAVEAT)
+    //PRINT_IF_SUPPORTED(EGL_NATIVE_VISUAL_ID)
+    //PRINT_IF_SUPPORTED(EGL_NATIVE_VISUAL_TYPE)
     PRINT_IF_SUPPORTED(EGL_SURFACE_TYPE)
-    PRINT_IF_SUPPORTED(EGL_TRANSPARENT_TYPE)
+    //PRINT_IF_SUPPORTED(EGL_TRANSPARENT_TYPE)
     PRINT_IF_SUPPORTED(EGL_SAMPLES)
     PRINT_IF_SUPPORTED(EGL_MAX_PBUFFER_WIDTH)
     PRINT_IF_SUPPORTED(EGL_MAX_PBUFFER_HEIGHT)
-    PRINT_IF_SUPPORTED(EGL_MAX_PBUFFER_PIXELS)
+    //PRINT_IF_SUPPORTED(EGL_MAX_PBUFFER_PIXELS)
     PRINT_IF_SUPPORTED(EGL_BLUE_SIZE)
     PRINT_IF_SUPPORTED(EGL_GREEN_SIZE)
     PRINT_IF_SUPPORTED(EGL_RED_SIZE)

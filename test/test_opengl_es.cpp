@@ -1,5 +1,6 @@
 /**
  * @author Park DongHa (luncliff@gmail.com)
+ * @see https://www.khronos.org/registry/EGL/sdk/docs/man/html/eglIntro.xhtml
  * @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLSyncControlTest.cpp
  * @see https://github.com/google/angle/blob/master/util/windows/win32/Win32Window.cpp 
  */

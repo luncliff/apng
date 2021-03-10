@@ -151,6 +151,7 @@ EGLint egl_context_t::swap() noexcept {
     case EGL_BAD_CONTEXT:
     case EGL_CONTEXT_LOST:
         terminate();
+        [[fallthrough]];
     default:
         return ec; // EGL_BAD_SURFACE and the others ...
     }
