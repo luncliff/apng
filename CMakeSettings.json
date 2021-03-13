@@ -1,7 +1,7 @@
 ﻿{
   "configurations": [
     {
-      "name": "x64-Debug",
+      "name": "x64-Debug-Qt5",
       "generator": "Ninja",
       "configurationType": "Debug",
       "inheritEnvironments": [
@@ -30,8 +30,38 @@
         },
         {
           "name": "Qt5_DIR",
-          "value": "C:\\tools\\Anaconda3\\Library\\lib\\cmake\\Qt5",
+          "value": "C:\\Qt\\5.15.1\\msvc2019_64\\lib\\cmake\\Qt5",
           "type": "STRING"
+        }
+      ]
+    },
+    {
+      "name": "x64-Debug",
+      "generator": "Ninja",
+      "configurationType": "Debug",
+      "inheritEnvironments": [
+        "msvc_x64_x64"
+      ],
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "variables": [
+        {
+          "name": "CMAKE_TOOLCHAIN_FILE",
+          "value": "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake",
+          "type": "PATH"
+        },
+        {
+          "name": "VCPKG_TARGET_TRIPLET",
+          "value": "x64-windows",
+          "type": "STRING"
+        },
+        {
+          "name": "BUILD_SHARED_LIBS",
+          "value": "true",
+          "type": "BOOL"
         }
       ]
     },
@@ -60,66 +90,6 @@
         },
         {
           "name": "BUILD_SHARED_LIBS",
-          "value": "true",
-          "type": "BOOL"
-        }
-      ]
-    },
-    {
-      "name": "x64-Debug-Clang",
-      "generator": "Ninja",
-      "configurationType": "Debug",
-      "inheritEnvironments": [
-        "clang_cl_x64_x64"
-      ],
-      "buildRoot": "${projectDir}\\out\\build\\${name}",
-      "installRoot": "${projectDir}\\out\\install\\${name}",
-      "cmakeCommandArgs": "",
-      "buildCommandArgs": "",
-      "ctestCommandArgs": "",
-      "variables": [
-        {
-          "name": "CMAKE_TOOLCHAIN_FILE",
-          "value": "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake",
-          "type": "PATH"
-        },
-        {
-          "name": "VCPKG_TARGET_TRIPLET",
-          "value": "x64-windows",
-          "type": "STRING"
-        },
-        {
-          "name": "BUILD_TESTING",
-          "value": "true",
-          "type": "BOOL"
-        }
-      ]
-    },
-    {
-      "name": "x64-Release-Clang",
-      "generator": "Ninja",
-      "configurationType": "Release",
-      "inheritEnvironments": [
-        "clang_cl_x64_x64"
-      ],
-      "buildRoot": "${projectDir}\\out\\build\\${name}",
-      "installRoot": "${projectDir}\\out\\install\\${name}",
-      "cmakeCommandArgs": "",
-      "buildCommandArgs": "",
-      "ctestCommandArgs": "",
-      "variables": [
-        {
-          "name": "CMAKE_TOOLCHAIN_FILE",
-          "value": "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake",
-          "type": "PATH"
-        },
-        {
-          "name": "VCPKG_TARGET_TRIPLET",
-          "value": "x64-windows",
-          "type": "STRING"
-        },
-        {
-          "name": "BUILD_TESTING",
           "value": "true",
           "type": "BOOL"
         }

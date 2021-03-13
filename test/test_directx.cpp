@@ -35,7 +35,9 @@
 namespace fs = std::filesystem;
 using winrt::com_ptr;
 
-#define LOCAL_EGL_PROC(fn, name) auto fn = reinterpret_cast<decltype(&name)>(eglGetProcAddress(#name));
+#define LOCAL_EGL_PROC(fn, name)                                                                                       \
+    auto fn = reinterpret_cast<decltype(&name)>(eglGetProcAddress(#name));                                             \
+    REQUIRE(fn);
 
 class ID3D11DeviceTestCase1 {
   protected:
@@ -44,36 +46,40 @@ class ID3D11DeviceTestCase1 {
 };
 
 TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_0(D3D_DRIVER_TYPE_REFERENCE)", "[directx][!mayfail]") {
-    D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
+    D3D_FEATURE_LEVEL levels[1]{D3D_FEATURE_LEVEL_11_0};
+    D3D_FEATURE_LEVEL level{};
     REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_REFERENCE, NULL,
-                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
+                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, levels, 1, //
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
     REQUIRE(device);
     REQUIRE(device->GetFeatureLevel() == level);
 }
 
 TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_0(D3D_DRIVER_TYPE_NULL)", "[directx][!mayfail]") {
-    D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
+    D3D_FEATURE_LEVEL levels[1]{D3D_FEATURE_LEVEL_11_0};
+    D3D_FEATURE_LEVEL level{};
     REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_NULL, NULL,
-                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
+                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, levels, 1, //
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
     REQUIRE(device);
     REQUIRE(device->GetFeatureLevel() == level);
 }
 
 TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_10_1(D3D_DRIVER_TYPE_HARDWARE)", "[directx][!mayfail]") {
-    D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_10_1;
+    D3D_FEATURE_LEVEL levels[1]{D3D_FEATURE_LEVEL_10_1};
+    D3D_FEATURE_LEVEL level{};
     REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL,
-                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
+                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, levels, 1, //
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
     REQUIRE(device);
     REQUIRE(device->GetFeatureLevel() == level);
 }
 
 TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_1(D3D_DRIVER_TYPE_HARDWARE)", "[directx][!mayfail]") {
-    D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_1;
+    D3D_FEATURE_LEVEL levels[2]{D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0};
+    D3D_FEATURE_LEVEL level{};
     REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL,
-                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
+                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, levels, 2, //
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
     REQUIRE(device);
     REQUIRE(device->GetFeatureLevel() == level);
@@ -91,6 +97,68 @@ TEST_CASE("eglGetPlatformDisplay(EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE)", "[egl][d
     };
     EGLDisplay display = eglGetPlatformDisplay(EGL_PLATFORM_ANGLE_ANGLE, EGL_DEFAULT_DISPLAY, attrs);
     REQUIRE(display != EGL_NO_DISPLAY);
+}
+
+TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx][!mayfail]") {
+    D3D_FEATURE_LEVEL level{};
+    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL,
+                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
+                              D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
+    REQUIRE(device);
+
+    LOCAL_EGL_PROC(create_device, eglCreateDeviceANGLE);
+    LOCAL_EGL_PROC(release_device, eglReleaseDeviceANGLE);
+    auto es_device_owner = std::unique_ptr<std::remove_pointer_t<EGLDeviceEXT>, PFNEGLRELEASEDEVICEANGLEPROC>{
+        create_device(EGL_D3D11_DEVICE_ANGLE, device.get(), nullptr), release_device};
+    EGLDeviceEXT es_device = es_device_owner.get();
+    REQUIRE(es_device != EGL_NO_DEVICE_EXT);
+    REQUIRE(eglGetError() == EGL_SUCCESS);
+
+    /// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLDeviceTest.cpp
+    SECTION("eglQueryDeviceAttribEXT(EGL_D3D9_DEVICE_ANGLE)") {
+        // Created with Dx11 API. D3D9 query muet fail
+        EGLAttrib attr{};
+        REQUIRE_FALSE(eglQueryDeviceAttribEXT(es_device, EGL_D3D9_DEVICE_ANGLE, &attr));
+        REQUIRE(eglGetError() == EGL_BAD_ATTRIBUTE);
+    }
+    SECTION("eglQueryDeviceAttribEXT(EGL_D3D11_DEVICE_ANGLE)") {
+        EGLAttrib attr{};
+        REQUIRE(eglQueryDeviceAttribEXT(es_device, EGL_D3D11_DEVICE_ANGLE, &attr));
+        REQUIRE(eglGetError() == EGL_SUCCESS);
+        ID3D11Device* handle = reinterpret_cast<ID3D11Device*>(attr);
+        REQUIRE(handle);
+        REQUIRE(level == handle->GetFeatureLevel());
+    }
+
+#if !defined(QT_OPENGL_LIB)
+    // Qt 5.12+ makes a crash in DllMain resouce cleanup after this TC
+    // Qt 5.9 seems like OK after the `eglReleaseDeviceANGLE`...
+    SECTION("eglGetPlatformDisplayEXT(EGL_PLATFORM_DEVICE_EXT)") {
+        EGLDisplay es_display = eglGetPlatformDisplayEXT(EGL_PLATFORM_DEVICE_EXT, es_device, nullptr);
+        if (es_display == EGL_NO_DISPLAY)
+            FAIL(eglGetError());
+        REQUIRE(eglTerminate(es_display));
+    }
+#endif
+
+    /// @see https://github.com/google/angle/blob/master/extensions/EGL_ANGLE_platform_angle.txt
+    SECTION("eglGetPlatformDisplayEXT(EGL_DEFAULT_DISPLAY)") {
+        EGLDisplay es_display = eglGetPlatformDisplayEXT(EGL_PLATFORM_ANGLE_ANGLE, EGL_DEFAULT_DISPLAY, nullptr);
+        if (es_display == EGL_NO_DISPLAY)
+            FAIL(eglGetError());
+        EGLint version[2];
+        REQUIRE(eglInitialize(es_display, version + 0, version + 1));
+        //REQUIRE(eglTerminate(es_display));
+    }
+    SECTION("eglGetPlatformDisplayEXT(EGL_D3D11_ONLY_DISPLAY_ANGLE)") {
+        EGLDisplay es_display =
+            eglGetPlatformDisplayEXT(EGL_PLATFORM_ANGLE_ANGLE, EGL_D3D11_ONLY_DISPLAY_ANGLE, nullptr);
+        if (es_display == EGL_NO_DISPLAY)
+            FAIL(eglGetError());
+        EGLint version[2];
+        REQUIRE(eglInitialize(es_display, version + 0, version + 1));
+        //REQUIRE(eglTerminate(es_display));
+    }
 }
 
 void make_egl_config(EGLDisplay display, EGLConfig& config) {
@@ -113,9 +181,10 @@ void make_egl_config(EGLDisplay display, EGLConfig& config) {
     REQUIRE(count);
 }
 
-// Create an EGLDisplay using the EGLDevice
-// see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLPresentPathD3D11Test.cpp
-void make_egl_display(EGLDeviceEXT device, EGLDisplay& display) {
+/// @brief Create an EGLDisplay using the EGLDevice
+/// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLDeviceTest.cpp
+/// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLPresentPathD3D11Test.cpp
+[[deprecated("the function makes crash on Qt5.12+")]] void make_egl_display(EGLDeviceEXT device, EGLDisplay& display) {
     display = eglGetPlatformDisplayEXT(EGL_PLATFORM_DEVICE_EXT, device, nullptr);
     if (display == EGL_NO_DISPLAY)
         FAIL(eglGetError());
@@ -146,44 +215,6 @@ void make_client_egl_surface(EGLDisplay display, EGLConfig config, ID3D11Texture
     surface = eglCreatePbufferFromClientBuffer(display, EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE, handle, config, attrs);
     if (surface == EGL_NO_SURFACE)
         FAIL(eglGetError());
-}
-
-TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx][!mayfail]") {
-    D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
-    REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL,
-                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
-                              D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
-    REQUIRE(device);
-    REQUIRE(device->GetFeatureLevel() == level);
-
-    LOCAL_EGL_PROC(create_device, eglCreateDeviceANGLE);
-    LOCAL_EGL_PROC(release_device, eglReleaseDeviceANGLE);
-
-    EGLDeviceEXT es_device = create_device(EGL_D3D11_DEVICE_ANGLE, device.get(), nullptr);
-    REQUIRE(es_device != EGL_NO_DEVICE_EXT);
-    REQUIRE(eglGetError() == EGL_SUCCESS);
-    auto on_return = gsl::finally([release_device, es_device]() { REQUIRE(release_device(es_device)); });
-
-    SECTION("eglGetPlatformDisplayEXT") {
-        EGLDisplay es_display = EGL_NO_DISPLAY;
-        make_egl_display(es_device, es_display);
-        REQUIRE(eglTerminate(es_display));
-    }
-    SECTION("eglQueryDeviceAttribEXT(EGL_D3D9_DEVICE_ANGLE)") {
-        // Created with Dx11 API. D3D9 query muet fail
-        EGLAttrib attr{};
-        REQUIRE_FALSE(eglQueryDeviceAttribEXT(es_device, EGL_D3D9_DEVICE_ANGLE, &attr));
-        REQUIRE(eglGetError() == EGL_BAD_ATTRIBUTE);
-    }
-    SECTION("eglQueryDeviceAttribEXT(EGL_D3D11_DEVICE_ANGLE)") {
-        /// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLDeviceTest.cpp
-        EGLAttrib attr{};
-        REQUIRE(eglQueryDeviceAttribEXT(es_device, EGL_D3D11_DEVICE_ANGLE, &attr));
-        REQUIRE(eglGetError() == EGL_SUCCESS);
-        ID3D11Device* handle = reinterpret_cast<ID3D11Device*>(attr);
-        REQUIRE(handle);
-        REQUIRE(level == handle->GetFeatureLevel());
-    }
 }
 
 /// @see https://docs.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-devices-layers
@@ -245,23 +276,22 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D(D3D11_USAGE_DYNAMIC)
     }
     REQUIRE(texture);
 
-    // see https://docs.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-map
-    D3D11_MAPPED_SUBRESOURCE mapping{};
-    REQUIRE(device_context->Map(texture.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapping) == S_OK);
+    /// @see https://docs.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-map
+    DirectX::MapGuard mapping{device_context.get(), texture.get(), 0, D3D11_MAP_WRITE_DISCARD, 0};
     REQUIRE(mapping.pData);
     CAPTURE(mapping.RowPitch, mapping.DepthPitch);
+    /// @note the pitch may different in runtime. It is expected to be aligned in 16 bytes
     switch (desc.Format) {
     case DXGI_FORMAT_R8G8B8A8_UNORM:
-        REQUIRE(mapping.RowPitch >= 500 * 4); // the region is aligned in 16 bytes
+        REQUIRE(mapping.RowPitch >= 500 * 4); // or 512 * 4
         break;
     case DXGI_FORMAT_NV12:
-        REQUIRE(mapping.RowPitch >= 500);
+        REQUIRE(mapping.RowPitch >= 500); // or 512
         break;
     case DXGI_FORMAT_YUY2:
-        REQUIRE(mapping.RowPitch >= 500 * 2);
+        REQUIRE(mapping.RowPitch >= 500 * 2); // or 512 * 2
         break;
     }
-    device_context->Unmap(texture.get(), 0);
 }
 
 SCENARIO_METHOD(ID3D11Texture2DTestCase1, "IWICBitmapDecoder", "[directx][!mayfail][file]") {
@@ -350,6 +380,7 @@ HRESULT make_test_texture2D(ID3D11Device* device, D3D11_TEXTURE2D_DESC& info, ID
     return device->CreateTexture2D(&info, nullptr, texture);
 }
 
+/// @see https://github.com/google/angle/blob/master/util/EGLWindow.cpp
 /// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLPresentPathD3D11Test.cpp
 TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D to EGLImage", "[directx][!mayfail][egl][!mayfail]") {
     D3D11_TEXTURE2D_DESC info{};
@@ -357,15 +388,8 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D to EGLImage", "[dire
     REQUIRE(make_test_texture2D(device.get(), info, texture.put()) == S_OK);
     REQUIRE(texture);
 
-    LOCAL_EGL_PROC(create_device, eglCreateDeviceANGLE);
-    LOCAL_EGL_PROC(release_device, eglReleaseDeviceANGLE);
-
-    EGLDeviceEXT es_device = create_device(EGL_D3D11_DEVICE_ANGLE, device.get(), nullptr);
-    auto on_return_1 = gsl::finally([release_device, es_device]() { release_device(es_device); });
-
-    EGLDisplay es_display = EGL_NO_DISPLAY;
-    make_egl_display(es_device, es_display);
-    auto on_return_2 = gsl::finally([es_display]() { REQUIRE(eglTerminate(es_display)); });
+    EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    //auto on_return_2 = gsl::finally([es_display]() { REQUIRE(eglTerminate(es_display)); });
 
     EGLConfig es_config{};
     make_egl_config(es_display, es_config);
