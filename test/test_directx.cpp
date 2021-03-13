@@ -106,6 +106,8 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
     REQUIRE(device);
 
+    /// @see https://github.com/google/angle/blob/master/extensions/EGL_ANGLE_device_creation.txt
+    /// @see https://github.com/google/angle/blob/master/extensions/EGL_ANGLE_device_creation_d3d11.txt
     LOCAL_EGL_PROC(create_device, eglCreateDeviceANGLE);
     LOCAL_EGL_PROC(release_device, eglReleaseDeviceANGLE);
     auto es_device_owner = std::unique_ptr<std::remove_pointer_t<EGLDeviceEXT>, PFNEGLRELEASEDEVICEANGLEPROC>{
@@ -114,6 +116,7 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx
     REQUIRE(es_device != EGL_NO_DEVICE_EXT);
     REQUIRE(eglGetError() == EGL_SUCCESS);
 
+    /// @see https://github.com/google/angle/blob/master/extensions/EGL_EXT_device_query.txt
     /// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLDeviceTest.cpp
     SECTION("eglQueryDeviceAttribEXT(EGL_D3D9_DEVICE_ANGLE)") {
         // Created with Dx11 API. D3D9 query muet fail
@@ -473,3 +476,6 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D to EGLImage", "[dire
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     }
 }
+
+
+/// @todo https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLStreamTest.cpp
