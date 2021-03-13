@@ -127,6 +127,33 @@ if(Vulkan_FOUND)
     )
 endif()
 
+install(TARGETS  graphics
+        EXPORT   ${PROJECT_NAME}-config
+        RUNTIME  DESTINATION bin
+        LIBRARY  DESTINATION lib
+        ARCHIVE  DESTINATION lib
+        PUBLIC_HEADER DESTINATION include
+)
+install(EXPORT   ${PROJECT_NAME}-config
+        DESTINATION share/${PROJECT_NAME}
+)
+
+include(CMakePackageConfigHelpers)
+set(VERSION_FILE_PATH   ${CMAKE_BINARY_DIR}/cmake/${PROJECT_NAME}-config-version.cmake)
+write_basic_package_version_file(${VERSION_FILE_PATH}
+    VERSION             ${PROJECT_VERSION}
+    COMPATIBILITY       SameMajorVersion
+)
+install(FILES           ${VERSION_FILE_PATH} 
+        DESTINATION     share/${PROJECT_NAME}
+)
+if(QtANGLE_FOUND)
+    install(FILES   ${QtANGLE_EGL_LOCATION} ${QtANGLE_EGL_PDB_LOCATION} ${QtANGLE_GLES_LOCATION} ${QtANGLE_GLES_PDB_LOCATION} 
+                    ${QtANGLE_EGL_LOCATION} ${QtANGLE_EGL_PDB_LOCATION} ${QtANGLE_GLES_LOCATION} ${QtANGLE_GLES_PDB_LOCATION}
+            DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
+    )
+endif()
+
 enable_testing()
 find_package(glfw3 3.3 CONFIG REQUIRED)
 find_package(Catch2 CONFIG REQUIRED)
@@ -176,7 +203,13 @@ PRIVATE
     # CATCH_CONFIG_FAST_COMPILE
 )
 
-# add_test(NAME test_vulkan COMMAND graphics_test_suite "[vulkan]")
 add_test(NAME test_egl COMMAND graphics_test_suite "[egl]")
 add_test(NAME test_windows COMMAND graphics_test_suite "[windows]")
-add_test(NAME test_directx COMMAND graphics_test_suite "[windows]")
+add_test(NAME test_directx COMMAND graphics_test_suite "[directx]")
+if(Vulkan_FOUND)
+    add_test(NAME test_vulkan COMMAND graphics_test_suite "[vulkan]")
+endif()
+
+install(TARGETS  graphics_test_suite
+        RUNTIME  DESTINATION bin
+)

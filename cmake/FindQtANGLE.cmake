@@ -6,9 +6,12 @@
 #   - https://cmake.org/cmake/help/latest/manual/cmake-qt.7.html
 #   - https://wiki.qt.io/Qt_5_on_Windows_ANGLE_and_OpenGL
 # 
+# Note
+#   - Qt 6.0 is not tested yet...
+#
 # Tested 'Qt5_DIR's
 #   - Anaconda3 Qt 5.9 - "C:\\Users\\luncl\\Anaconda3\\Library\\lib\\cmake\\Qt5"
-#   - Qt 5.12.9 - "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2017_64"
+#   - Qt 5.12.9 - "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2017_64\lib\\cmake\\Qt5"
 #
 cmake_minimum_required(VERSION 3.18)
 
@@ -73,6 +76,7 @@ if(WIN32)
     endif()
 endif()
 
+set(QtANGLE_FOUND TRUE)
 message(STATUS "Found QtANGLE ${Qt5_VERSION}")
 message(STATUS " - ${QtANGLE_INCLUDE_DIR}")
 message(STATUS " - ${QtANGLE_LIBRARY_DIR}")
@@ -120,5 +124,3 @@ if(WIN32)
         ${QtANGLE_COMPILE_DEFINITIONS}
     )
 endif()
-
-set(QtANGLE_FOUND TRUE)
