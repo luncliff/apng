@@ -133,7 +133,7 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx
         REQUIRE(level == handle->GetFeatureLevel());
     }
 
-#if !defined(QT_OPENGL_LIB)
+// #if !defined(QT_OPENGL_LIB)
     // Qt 5.12+ makes a crash in DllMain resouce cleanup after this TC
     // Qt 5.9 seems like OK after the `eglReleaseDeviceANGLE`...
     SECTION("eglGetPlatformDisplayEXT(EGL_PLATFORM_DEVICE_EXT)") {
@@ -142,7 +142,7 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx
             FAIL(eglGetError());
         REQUIRE(eglTerminate(es_display));
     }
-#endif
+// #endif
 
     /// @see https://github.com/google/angle/blob/master/extensions/EGL_ANGLE_platform_angle.txt
     SECTION("eglGetPlatformDisplayEXT(EGL_DEFAULT_DISPLAY)") {
@@ -198,6 +198,7 @@ void make_egl_config(EGLDisplay display, EGLConfig& config) {
     REQUIRE(minor >= 4);
     REQUIRE(eglBindAPI(EGL_OPENGL_ES_API));
 }
+/*
 
 void make_client_egl_surface(EGLDisplay display, EGLConfig config, ID3D11Texture2D* texture, EGLSurface& surface) {
     com_ptr<IDXGIResource> resource{};
@@ -479,3 +480,4 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D to EGLImage", "[dire
 
 
 /// @todo https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLStreamTest.cpp
+*/

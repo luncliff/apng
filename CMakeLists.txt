@@ -160,19 +160,19 @@ find_package(Catch2 CONFIG REQUIRED)
 
 add_executable(graphics_test_suite
     test/test_main.cpp
-    test/test_gltf.cpp
+    # test/test_gltf.cpp
     test/test_directx.cpp
-    test/test_opengl_es.cpp
+    # test/test_opengl_es.cpp
     # test/test_vulkan_device.cpp
     # test/test_vulkan_surface_glfw.cpp
     # test/test_vulkan_pipeline.cpp
     # test/test_vulkan_descriptor_set.cpp
 )
 if(QtANGLE_FOUND)
-    target_sources(graphics_test_suite
-    PRIVATE
-        test/test_qt5.cpp
-    )
+    # target_sources(graphics_test_suite
+    # PRIVATE
+    #     test/test_qt5.cpp
+    # )
 endif()
 # add_dependencies(graphics_test_suite compile_shaders_glsl)
 
