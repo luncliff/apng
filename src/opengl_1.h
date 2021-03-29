@@ -21,25 +21,6 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 
-/**
- * @brief EGL Context and other informations + RAII
- */
-struct egl_helper_t {
-    EGLNativeWindowType native_window{};
-    EGLNativeDisplayType native_display = EGL_DEFAULT_DISPLAY;
-    EGLDisplay display = EGL_NO_DISPLAY;
-    EGLint major = 0, minor = 0;
-    EGLint count = 0;
-    EGLConfig configs[10]{};
-    EGLContext context = EGL_NO_CONTEXT;
-    EGLSurface surface = EGL_NO_SURFACE;
-
-  public:
-    explicit egl_helper_t(EGLNativeDisplayType native) noexcept(false);
-    egl_helper_t(EGLNativeWindowType native, bool is_console) noexcept(false);
-    ~egl_helper_t() noexcept;
-};
-
 #endif // <EGL/egl.h>
 
 namespace fs = std::filesystem;
@@ -53,24 +34,6 @@ auto create(const fs::path& p) -> std::unique_ptr<FILE, int (*)(FILE*)>;
  * @see   `std::error_category`
  */
 std::error_category& get_opengl_category() noexcept;
-
-using readback_callback_t = void (*)(void* user_data, const void* mapping, size_t length);
-
-class opengl_readback_t final {
-  private:
-    GLuint pbos[2]{};
-    const uint16_t capacity = 2;
-    uint32_t length = 0; // length of the buffer modification
-    GLintptr offset = 0;
-
-  public:
-    opengl_readback_t(GLint w, GLint h) noexcept(false);
-    ~opengl_readback_t() noexcept(false);
-
-    /// @brief fbo -> pbo[idx]
-    GLenum pack(uint16_t idx, GLuint fbo, const GLint frame[4]) noexcept;
-    GLenum map_and_invoke(uint16_t idx, readback_callback_t callback, void* user_data) noexcept;
-};
 
 /**
  * @brief OpenGL Vertex Array Object + RAII

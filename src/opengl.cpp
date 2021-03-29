@@ -3,47 +3,6 @@
 
 using namespace std;
 
-opengl_readback_t::opengl_readback_t(GLint w, GLint h) noexcept(false) {
-    const auto length = w * h * 4;
-    if (length < 0)
-        throw std::invalid_argument{"width * height must positive"};
-    glGenBuffers(2, pbos);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[0]);
-    glBufferData(GL_PIXEL_PACK_BUFFER, length, nullptr, GL_STREAM_READ);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[1]);
-    glBufferData(GL_PIXEL_PACK_BUFFER, length, nullptr, GL_STREAM_READ);
-    if (auto ec = glGetError())
-        throw std::system_error{static_cast<int>(ec), get_opengl_category()};
-}
-
-opengl_readback_t::~opengl_readback_t() noexcept(false) {
-    glDeleteBuffers(2, pbos);
-    glGetError();
-}
-
-GLenum opengl_readback_t::pack(uint16_t idx, GLuint fbo, const GLint frame[4]) noexcept {
-    if (idx >= capacity)
-        return GL_INVALID_VALUE;
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[idx]);
-    glReadPixels(frame[0], frame[1], frame[2], frame[3], GL_RGBA, GL_UNSIGNED_BYTE, reinterpret_cast<void*>(offset));
-    if (auto ec = glGetError())
-        return ec;
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    length = (frame[2] - frame[0]) * (frame[3] - frame[1]) * 4;
-    return glGetError();
-};
-
-GLenum opengl_readback_t::map_and_invoke(uint16_t idx, readback_callback_t callback, void* user_data) noexcept {
-    if (idx >= capacity)
-        return GL_INVALID_VALUE;
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[idx]);
-    if (const void* ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, offset, length, GL_MAP_READ_BIT)) {
-        callback(user_data, ptr, length);
-        glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-    }
-    return glGetError();
-}
-
 opengl_vao_t::opengl_vao_t() noexcept {
     glGenVertexArrays(1, &name);
 }

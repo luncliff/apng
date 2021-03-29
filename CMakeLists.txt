@@ -17,6 +17,7 @@ add_library(graphics
     src/main.cpp
     src/context.cpp
     src/programs.cpp
+    src/pbo.cpp
     # src/opengl_1.h
     # src/opengl.cpp
     # src/opengl_es.cpp

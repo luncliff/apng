@@ -23,18 +23,6 @@
 #include <winrt/Windows.Foundation.h> // namespace winrt::Windows::Foundation
 #include <winrt/Windows.System.h>     // namespace winrt::Windows::System
 
-// clang-format off
-#include <d3d11_1.h>
-#include <d3dcompiler.h>
-#include <DirectXTex.h>
-#include <DirectXTK/DirectXHelpers.h>
-#include <DirectXTK/WICTextureLoader.h>
-#pragma comment(lib, "d3d11.lib")
-#pragma comment(lib, "d3dcompiler.lib")
-#pragma comment(lib, "dxguid.lib")
-#pragma comment(lib, "dxgi.lib")
-// clang-format on
-
 using winrt::com_ptr;
 
 TEST_CASE("eglGetProcAddress != GetProcAddress", "[egl]") {
@@ -235,7 +223,7 @@ struct win32_window_helper_t final {
     }
 
     bool consume_message(MSG& msg) {
-        if (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
+        while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
@@ -260,9 +248,11 @@ struct win32_window_helper_t final {
 TEST_CASE("EGLContext helper with Win32 HINSTANCE", "[egl][windows]") {
     win32_window_helper_t helper{};
     REQUIRE(helper.window);
-    REQUIRE(eglGetCurrentContext() == EGL_NO_CONTEXT);
 
-    egl_context_t context{eglGetDisplay(EGL_DEFAULT_DISPLAY), EGL_NO_CONTEXT};
+    const EGLContext es_context = eglGetCurrentContext();
+    REQUIRE(es_context == EGL_NO_CONTEXT);
+
+    egl_context_t context{eglGetDisplay(EGL_DEFAULT_DISPLAY), es_context};
     REQUIRE(context.is_valid());
     REQUIRE(context.resume(helper.window) == EGL_SUCCESS);
 
@@ -273,6 +263,20 @@ TEST_CASE("EGLContext helper with Win32 HINSTANCE", "[egl][windows]") {
         spdlog::info("  GL_RENDERER: {:s}", glGetString(GL_RENDERER));
         spdlog::info("  GL_SHADING_LANGUAGE_VERSION: {:s}", glGetString(GL_SHADING_LANGUAGE_VERSION));
         REQUIRE(glGetError() == GL_NO_ERROR);
+    }
+    SECTION("fullspeed swap") {
+        for (auto i = 0u; i < 256; ++i) {
+            MSG msg{};
+            if (helper.consume_message(msg) == false) // WM_QUIT
+                break;
+            SleepEx(5, TRUE);
+            glClearColor(0, static_cast<float>(i) / 255, 0, 1);
+            glClear(GL_COLOR_BUFFER_BIT);
+            if (auto ec = glGetError())
+                FAIL(ec);
+            if (auto ec = context.swap(); ec != EGL_SUCCESS)
+                FAIL(ec);
+        }
     }
 }
 
@@ -317,7 +321,6 @@ TEST_CASE_METHOD(glfw_test_case, "GLFW + OpenGL ES", "[opengl][glfw]") {
             glClear(GL_COLOR_BUFFER_BIT);
             // ...
             glfwSwapBuffers(window.get());
-            glfwPollEvents();
         }
     }
 }
@@ -392,7 +395,7 @@ TEST_CASE_METHOD(glfw_test_case, "GLFW info", "[glfw]") {
 }
 
 // see https://www.roxlu.com/2014/048/fast-pixel-transfers-with-pixel-buffer-objects
-TEST_CASE_METHOD(glfw_test_case, "PixelBufferObject", "[opengl][glfw]") {
+TEST_CASE_METHOD(glfw_test_case, "PixelBufferObject 1", "[opengl][glfw]") {
     glfwMakeContextCurrent(window.get());
     GLint w = 0, h = 0;
     glfwGetFramebufferSize(window.get(), &w, &h);
@@ -479,61 +482,72 @@ TEST_CASE_METHOD(glfw_test_case, "PixelBufferObject", "[opengl][glfw]") {
     }
 }
 
-#if FALSE
-TEST_CASE("OpenGL readback_t", "[opengl][glfw]") {
-    auto stream = get_current_stream();
-    auto on_return = start_opengl_test();
-    auto window = create_opengl_window("GLFW3");
-    if (window == nullptr) {
-        const char* message = nullptr;
-        glfwGetError(&message);
-        FAIL(message);
-    }
+/// @see http://docs.gl/es3/glReadPixels
+TEST_CASE_METHOD(glfw_test_case, "PixelBufferObject 2", "[opengl][glfw]") {
     glfwMakeContextCurrent(window.get());
     GLint frame[4]{};
     glGetIntegerv(GL_VIEWPORT, frame);
     REQUIRE(glGetError() == GL_NO_ERROR);
     REQUIRE(frame[2] * frame[3] > 0);
 
-    readback_callback_t is_untouched = [](void*, const void* mapping, size_t) {
-        REQUIRE(*reinterpret_cast<const uint32_t*>(mapping) == 0x00'00'00'00); // ABGR in 32 bpp
-    };
-    readback_callback_t is_blue = [](void*, const void* mapping, size_t) {
-        REQUIRE(*reinterpret_cast<const uint32_t*>(mapping) == 0xFF'FF'00'00);
-    };
-    readback_callback_t is_blue_green = [](void*, const void* mapping, size_t) {
-        REQUIRE(*reinterpret_cast<const uint32_t*>(mapping) == 0xFF'FF'FF'00);
-    };
-    opengl_readback_t readback{frame[2], frame[3]};
+    // The other acceptable pair can be discovered by querying GL_IMPLEMENTATION_COLOR_READ_FORMAT and GL_IMPLEMENTATION_COLOR_READ_TYPE.
+    framebuffer_reader_t reader{static_cast<GLuint>(frame[2] * frame[3] * 4)};
+    if (auto ec = reader.is_valid())
+        FAIL(ec);
     glReadBuffer(GL_BACK);
     REQUIRE(glGetError() == GL_NO_ERROR);
 
+    GLint read_format{};
+    glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_FORMAT, &read_format);
+    REQUIRE(glGetError() == GL_NO_ERROR);
+    CAPTURE(read_format, GL_RGBA);
+
+    GLint read_type{};
+    glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_TYPE, &read_type);
+    REQUIRE(glGetError() == GL_NO_ERROR);
+    CAPTURE(read_type, GL_UNSIGNED_BYTE);
+
+    reader_callback_t is_untouched = [](void*, const void* mapping, size_t) {
+        REQUIRE(*reinterpret_cast<const uint32_t*>(mapping) == 0x00'00'00'00); // ABGR in 32 bpp
+    };
+    reader_callback_t is_blue = [](void*, const void* mapping, size_t) {
+        REQUIRE(*reinterpret_cast<const uint32_t*>(mapping) == 0xFF'FF'00'00);
+    };
+    reader_callback_t is_blue_green = [](void*, const void* mapping, size_t) {
+        REQUIRE(*reinterpret_cast<const uint32_t*>(mapping) == 0xFF'FF'FF'00);
+    };
+
+    GLuint fbo = 0; // use current window
     uint16_t count = 20;
     while (--count) {
         auto const front = static_cast<uint16_t>((count + 1) % 2);
         auto const back = static_cast<uint16_t>(count % 2);
-        // perform rendering
+        // perform rendering...
+        // 1st --> blue_green
+        // 2nd --> blue
+        // 3rd --> blue_green
+        // ...
         glClearColor(0, static_cast<float>(back), 1, 1);
         glClear(GL_COLOR_BUFFER_BIT);
-        // pack the back buffer
-        if (auto ec = readback.pack(back, 0, frame))
-            FAIL(ec);
 
+        // pack to the back buffer(GL_BACK)
+        if (auto ec = reader.pack(back, fbo, frame))
+            FAIL(ec);
         // map the front buffer and read
         if (count == 19) {
             // if there was no read, the pixel buffer object is clean and must hold zero (0,0,0,0)
-            if (auto ec = readback.map_and_invoke(front, is_untouched, nullptr))
+            // this is the first read, so it will be untouched
+            if (auto ec = reader.map_and_invoke(front, is_untouched, nullptr))
                 FAIL(ec);
         } else {
-            // if back == 0, the clear color of previous frame is (0,1,1,1). this is blue_green.
-            // if `back` index equals 1, the color is (0,0,1,1), which is blue.
-            if (auto ec = readback.map_and_invoke(front, back == 0 ? is_blue_green : is_blue, nullptr))
+            // if back == 0, (2nd, 4th... read) the clear color of previous frame is (0,1,1,1). this is blue_green.
+            // if back == 1, (3rd, 5rh... read) the color is (0,0,1,1), which is blue.
+            if (auto ec = reader.map_and_invoke(front, back == 0 ? is_blue_green : is_blue, nullptr))
                 FAIL(ec);
         }
         glfwSwapBuffers(window.get());
     }
 }
-#endif
 
 auto start_opengl_test() -> gsl::final_action<void (*)()> {
     REQUIRE(glfwInit());
