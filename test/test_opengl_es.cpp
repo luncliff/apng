@@ -61,19 +61,6 @@ TEST_CASE("GetProcAddress", "[opengl]") {
     }
 }
 
-void get_extensions(EGLDisplay display, std::vector<std::string_view>& names) {
-    if (const auto txt = eglQueryString(display /*EGL_NO_DISPLAY*/, EGL_EXTENSIONS)) {
-        const auto txtlen = strlen(txt);
-        auto offset = 0;
-        for (auto i = 0u; i < txtlen; ++i) {
-            if (isspace(txt[i]) == false)
-                continue;
-            names.emplace_back(txt + offset, i - offset);
-            offset = ++i;
-        }
-    }
-}
-
 void print_info(EGLDisplay display) {
     spdlog::info("EGL:");
     if (gsl::czstring<> txt = eglQueryString(display, EGL_VERSION))
@@ -101,8 +88,8 @@ TEST_CASE("EGLContext setup/teardown", "[egl]") {
     auto on_return1 = gsl::finally([display]() {
         REQUIRE(eglTerminate(display)); // ...
     });
-    print_info(display);
     REQUIRE(eglBindAPI(EGL_OPENGL_ES_API));
+    print_info(display);
 
     EGLint count = 0;
     EGLConfig configs[10]{};
@@ -119,6 +106,24 @@ TEST_CASE("EGLContext setup/teardown", "[egl]") {
         eglDestroyContext(display, context);
         REQUIRE(eglGetError() == EGL_SUCCESS);
     });
+}
+
+TEST_CASE("EGL_EXTENSIONS", "[egl][!mayfail]") {
+    EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    EGLint versions[2]{};
+    REQUIRE(eglInitialize(es_display, versions + 0, versions + 1) == EGL_TRUE);
+    REQUIRE(eglGetError() == EGL_SUCCESS);
+    auto on_return1 = gsl::finally([es_display]() { REQUIRE(eglTerminate(es_display)); });
+
+    REQUIRE(eglBindAPI(EGL_OPENGL_ES_API));
+    SECTION("KHR") {
+        CHECK(has_extension(es_display, "EGL_KHR_gl_texture_2D_image"));
+        CHECK(has_extension(es_display, "EGL_KHR_fence_sync"));
+    }
+    SECTION("ANGLE") {
+        CHECK(has_extension(es_display, "EGL_ANGLE_d3d_share_handle_client_buffer"));
+        CHECK(has_extension(es_display, "EGL_ANGLE_surface_d3d_texture_2d_share_handle"));
+    }
 }
 
 /// @see https://support.microsoft.com/en-us/help/124103/how-to-obtain-a-console-window-handle-hwnd
@@ -280,6 +285,20 @@ TEST_CASE("EGLContext helper with Win32 HINSTANCE", "[egl][windows]") {
     }
 }
 
+TEST_CASE("GL_PIXEL_UNPACK_BUFFER 1", "[egl][windows]") {
+    win32_window_helper_t helper{};
+    REQUIRE(helper.window);
+
+    egl_context_t context{eglGetDisplay(EGL_DEFAULT_DISPLAY), eglGetCurrentContext()};
+    REQUIRE(context.is_valid());
+    REQUIRE(context.resume(helper.window) == EGL_SUCCESS);
+
+    const auto length = static_cast<GLuint>(context.surface_width * context.surface_height * 4);
+    REQUIRE(length);
+    pbo_writer_t writer{length};
+    REQUIRE(writer.is_valid() == GL_NO_ERROR);
+}
+
 auto start_opengl_test() -> gsl::final_action<void (*)()>;
 auto create_opengl_window(gsl::czstring<> window_name, GLint width, GLint height) noexcept
     -> std::unique_ptr<GLFWwindow, void (*)(GLFWwindow*)>;
@@ -395,7 +414,7 @@ TEST_CASE_METHOD(glfw_test_case, "GLFW info", "[glfw]") {
 }
 
 // see https://www.roxlu.com/2014/048/fast-pixel-transfers-with-pixel-buffer-objects
-TEST_CASE_METHOD(glfw_test_case, "PixelBufferObject 1", "[opengl][glfw]") {
+TEST_CASE_METHOD(glfw_test_case, "GL_PIXEL_PACK_BUFFER 1", "[opengl][glfw]") {
     glfwMakeContextCurrent(window.get());
     GLint w = 0, h = 0;
     glfwGetFramebufferSize(window.get(), &w, &h);
@@ -483,7 +502,7 @@ TEST_CASE_METHOD(glfw_test_case, "PixelBufferObject 1", "[opengl][glfw]") {
 }
 
 /// @see http://docs.gl/es3/glReadPixels
-TEST_CASE_METHOD(glfw_test_case, "PixelBufferObject 2", "[opengl][glfw]") {
+TEST_CASE_METHOD(glfw_test_case, "GL_PIXEL_PACK_BUFFER 2", "[opengl][glfw]") {
     glfwMakeContextCurrent(window.get());
     GLint frame[4]{};
     glGetIntegerv(GL_VIEWPORT, frame);
@@ -491,7 +510,7 @@ TEST_CASE_METHOD(glfw_test_case, "PixelBufferObject 2", "[opengl][glfw]") {
     REQUIRE(frame[2] * frame[3] > 0);
 
     // The other acceptable pair can be discovered by querying GL_IMPLEMENTATION_COLOR_READ_FORMAT and GL_IMPLEMENTATION_COLOR_READ_TYPE.
-    framebuffer_reader_t reader{static_cast<GLuint>(frame[2] * frame[3] * 4)};
+    pbo_reader_t reader{static_cast<GLuint>(frame[2] * frame[3] * 4)};
     if (auto ec = reader.is_valid())
         FAIL(ec);
     glReadBuffer(GL_BACK);

@@ -61,7 +61,9 @@
  * @see   `std::system_error`
  * @see   `std::error_category`
  */
-std::error_category& get_opengl_category() noexcept;
+_INTERFACE_ std::error_category& get_opengl_category() noexcept;
+_INTERFACE_ void get_extensions(EGLDisplay display, std::vector<std::string_view>& names) noexcept;
+_INTERFACE_ bool has_extension(EGLDisplay display, std::string_view name) noexcept;
 
 /**
  * @brief `EGLContext` and `EGLSurface` owner.
@@ -75,6 +77,7 @@ class _INTERFACE_ egl_context_t final {
     gsl::owner<EGLContext> context = EGL_NO_CONTEXT;
     EGLConfig configs[3]{};
     gsl::owner<EGLSurface> surface = EGL_NO_SURFACE; // EGLSurface for Draw/Read
+  public:
     int32_t surface_width = 0;
     int32_t surface_height = 0;
 
@@ -162,9 +165,10 @@ using reader_callback_t = void (*)(void* user_data, const void* mapping, size_t 
  * @todo Test rendering surfaces with signed integer - GL_RGBA_INTEGER/GL_INT
  * @todo Test rendering surfaces with for unsigned integer - GL_RGBA_INTEGER/GL_UNSIGNED_INT
  *
+ * @see GL_PIXEL_PACK_BUFFER
  * @see GL_EXT_map_buffer_range https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_map_buffer_range.txt
  */
-class framebuffer_reader_t final {
+class _INTERFACE_ pbo_reader_t final {
     static constexpr uint16_t capacity = 2;
 
   private:
@@ -174,12 +178,12 @@ class framebuffer_reader_t final {
     GLenum ec = GL_NO_ERROR;
 
   public:
-    explicit framebuffer_reader_t(GLuint length) noexcept;
-    ~framebuffer_reader_t() noexcept;
-    framebuffer_reader_t(framebuffer_reader_t const&) = delete;
-    framebuffer_reader_t& operator=(framebuffer_reader_t const&) = delete;
-    framebuffer_reader_t(framebuffer_reader_t&&) = delete;
-    framebuffer_reader_t& operator=(framebuffer_reader_t&&) = delete;
+    explicit pbo_reader_t(GLuint length) noexcept;
+    ~pbo_reader_t() noexcept;
+    pbo_reader_t(pbo_reader_t const&) = delete;
+    pbo_reader_t& operator=(pbo_reader_t const&) = delete;
+    pbo_reader_t(pbo_reader_t&&) = delete;
+    pbo_reader_t& operator=(pbo_reader_t&&) = delete;
 
     /**
      * @brief check whether the construction was successful
@@ -213,4 +217,36 @@ class framebuffer_reader_t final {
      * @see glUnmapBuffer
      */
     GLenum map_and_invoke(uint16_t idx, reader_callback_t callback, void* user_data) noexcept;
+};
+
+/// @see memcpy
+using writer_callback_t = void (*)(void* user_data, void* mapping, size_t length);
+
+/**
+ * @see GL_PIXEL_UNPACK_BUFFER
+ * @see GL_EXT_map_buffer_range https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_map_buffer_range.txt
+ */
+class _INTERFACE_ pbo_writer_t final {
+    static constexpr uint16_t capacity = 2;
+
+  private:
+    GLuint pbos[capacity];
+    uint32_t length;
+    GLenum ec = GL_NO_ERROR;
+
+  public:
+    explicit pbo_writer_t(GLuint length) noexcept;
+    ~pbo_writer_t() noexcept;
+    pbo_writer_t(pbo_writer_t const&) = delete;
+    pbo_writer_t& operator=(pbo_writer_t const&) = delete;
+    pbo_writer_t(pbo_writer_t&&) = delete;
+    pbo_writer_t& operator=(pbo_writer_t&&) = delete;
+
+    /**
+     * @brief check whether the construction was successful
+     * @return GLenum   cached `ec` from the constructor
+     */
+    GLenum is_valid() const noexcept;
+
+    GLenum map_and_invoke(uint16_t idx, writer_callback_t callback, void* user_data) noexcept;
 };

@@ -107,6 +107,7 @@ EGLint egl_context_t::suspend() noexcept {
         if (eglDestroySurface(display, surface) == EGL_FALSE)
             return report_egl_error("eglDestroySurface", eglGetError());
         surface = EGL_NO_SURFACE;
+        surface_width = surface_height = 0;
     }
     return EGL_SUCCESS;
 }
@@ -177,4 +178,40 @@ EGLint egl_context_t::get_configs(EGLDisplay display, EGLConfig* configs, EGLint
     if (eglChooseConfig(display, nullptr, configs, count, &count) == EGL_FALSE)
         return eglGetError();
     return 0;
+}
+
+bool for_each_extension(EGLDisplay display, bool (*handler)(std::string_view, void* ptr), void* ptr) noexcept {
+    if (const auto txt = eglQueryString(display, EGL_EXTENSIONS)) {
+        const auto txtlen = strlen(txt);
+        auto offset = 0;
+        for (auto i = 0u; i < txtlen; ++i) {
+            if (isspace(txt[i]) == false)
+                continue;
+            if (handler({txt + offset, i - offset}, ptr))
+                return true;
+            offset = ++i;
+        }
+    }
+    return false;
+}
+
+void get_extensions(EGLDisplay display, std::vector<std::string_view>& names) noexcept {
+    for_each_extension(
+        display,
+        [](std::string_view name, void* ptr) {
+            auto& ref = *reinterpret_cast<std::vector<std::string_view>*>(ptr);
+            ref.emplace_back(name);
+            return false; // continue loop
+        },
+        &names);
+}
+
+bool has_extension(EGLDisplay display, std::string_view name) noexcept {
+    return for_each_extension(
+        display,
+        [](std::string_view name, void* ptr) {
+            const auto& ref = *reinterpret_cast<std::string_view*>(ptr);
+            return ref == name; // if same name, then end the loop.
+        },
+        &name);
 }

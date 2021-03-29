@@ -1,7 +1,7 @@
 #include <graphics.h>
 #include <spdlog/spdlog.h>
 
-framebuffer_reader_t::framebuffer_reader_t(GLuint length) noexcept : pbos{}, length{length}, offset{}, ec{GL_NO_ERROR} {
+pbo_reader_t::pbo_reader_t(GLuint length) noexcept : pbos{}, length{length}, offset{}, ec{GL_NO_ERROR} {
     spdlog::trace(__FUNCTION__);
     glGenBuffers(capacity, pbos);
     if (ec = glGetError())
@@ -10,27 +10,28 @@ framebuffer_reader_t::framebuffer_reader_t(GLuint length) noexcept : pbos{}, len
         spdlog::debug("- pbo:");
         spdlog::debug("  id: {}", pbos[i]);
         spdlog::debug("  length: {}", length);
+        spdlog::debug("  usage: GL_STREAM_READ");
         glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[i]);
         glBufferData(GL_PIXEL_PACK_BUFFER, length, nullptr, GL_STREAM_READ);
     }
     ec = glGetError();
 }
 
-GLenum framebuffer_reader_t::is_valid() const noexcept {
+GLenum pbo_reader_t::is_valid() const noexcept {
     return ec;
 }
 
-framebuffer_reader_t::~framebuffer_reader_t() noexcept {
+pbo_reader_t::~pbo_reader_t() noexcept {
     spdlog::trace(__FUNCTION__);
     for (auto i = 0u; i < capacity; ++i)
         spdlog::debug("- pbo: {}", pbos[i]);
-
+    // delete and report if error generated
     glDeleteBuffers(capacity, pbos);
     if (auto ec = glGetError())
         spdlog::error("{} {}", __FUNCTION__, get_opengl_category().message(ec));
 }
 
-GLenum framebuffer_reader_t::pack(uint16_t idx, GLuint fbo, const GLint frame[4], GLenum format, GLenum type) noexcept {
+GLenum pbo_reader_t::pack(uint16_t idx, GLuint fbo, const GLint frame[4], GLenum format, GLenum type) noexcept {
     spdlog::trace(__FUNCTION__);
     if (idx >= capacity)
         return GL_INVALID_VALUE;
@@ -49,7 +50,7 @@ GLenum framebuffer_reader_t::pack(uint16_t idx, GLuint fbo, const GLint frame[4]
     return glGetError();
 }
 
-GLenum framebuffer_reader_t::map_and_invoke(uint16_t idx, reader_callback_t callback, void* user_data) noexcept {
+GLenum pbo_reader_t::map_and_invoke(uint16_t idx, reader_callback_t callback, void* user_data) noexcept {
     spdlog::trace(__FUNCTION__);
     if (idx >= capacity)
         return GL_INVALID_VALUE;
@@ -61,5 +62,49 @@ GLenum framebuffer_reader_t::map_and_invoke(uint16_t idx, reader_callback_t call
         callback(user_data, ptr, length);
         glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
     }
+    return glGetError();
+}
+
+pbo_writer_t::pbo_writer_t(GLuint length) noexcept : pbos{}, length{length}, ec{GL_NO_ERROR} {
+    spdlog::trace(__FUNCTION__);
+    glGenBuffers(capacity, pbos);
+    if (ec = glGetError())
+        return;
+    for (auto i = 0u; i < capacity; ++i) {
+        spdlog::debug("- pbo:");
+        spdlog::debug("  id: {}", pbos[i]);
+        spdlog::debug("  length: {}", length);
+        spdlog::debug("  usage: GL_STREAM_DRAW");
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbos[i]);
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, length, nullptr, GL_STREAM_DRAW);
+    }
+    ec = glGetError();
+}
+
+GLenum pbo_writer_t::is_valid() const noexcept {
+    return ec;
+}
+
+pbo_writer_t::~pbo_writer_t() noexcept {
+    spdlog::trace(__FUNCTION__);
+    for (auto i = 0u; i < capacity; ++i)
+        spdlog::debug("- pbo: {}", pbos[i]);
+    // delete and report if error generated
+    glDeleteBuffers(capacity, pbos);
+    if (auto ec = glGetError())
+        spdlog::error("{} {}", __FUNCTION__, get_opengl_category().message(ec));
+}
+
+GLenum pbo_writer_t::map_and_invoke(uint16_t idx, writer_callback_t callback, void* user_data) noexcept {
+    spdlog::trace(__FUNCTION__);
+    if (idx >= capacity)
+        return GL_INVALID_VALUE;
+    // 1 is for write (upload)
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbos[idx]);
+    if (void* mapping = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, length, GL_MAP_READ_BIT | GL_MAP_WRITE_BIT))
+        callback(user_data, mapping, length);
+    if (glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER) == false)
+        spdlog::warn("unmap buffer failed: {}", pbos[idx]);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     return glGetError();
 }
