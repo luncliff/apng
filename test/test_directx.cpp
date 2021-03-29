@@ -89,10 +89,12 @@ TEST_CASE("eglGetPlatformDisplay(EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE)", "[egl][d
     EGLAttrib attrs[]{
         EGL_PLATFORM_ANGLE_TYPE_ANGLE,
         EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE,
+        EGL_PLATFORM_ANGLE_DEVICE_TYPE_ANGLE,
+        EGL_PLATFORM_ANGLE_DEVICE_TYPE_HARDWARE_ANGLE,
         EGL_PLATFORM_ANGLE_MAX_VERSION_MAJOR_ANGLE,
         11,
         EGL_PLATFORM_ANGLE_MAX_VERSION_MINOR_ANGLE,
-        0,
+        EGL_DONT_CARE,
         EGL_NONE,
     };
     EGLDisplay display = eglGetPlatformDisplay(EGL_PLATFORM_ANGLE_ANGLE, EGL_DEFAULT_DISPLAY, attrs);
@@ -102,7 +104,9 @@ TEST_CASE("eglGetPlatformDisplay(EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE)", "[egl][d
 TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx][!mayfail]") {
     D3D_FEATURE_LEVEL level{};
     REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL,
-                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, //
+                              D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT |
+                                  D3D11_CREATE_DEVICE_VIDEO_SUPPORT,
+                              nullptr, 0, //
                               D3D11_SDK_VERSION, device.put(), &level, device_context.put()) == S_OK);
     REQUIRE(device);
 
@@ -131,6 +135,10 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx
         ID3D11Device* handle = reinterpret_cast<ID3D11Device*>(attr);
         REQUIRE(handle);
         REQUIRE(level == handle->GetFeatureLevel());
+        const auto flags = handle->GetCreationFlags();
+        REQUIRE(flags & D3D11_CREATE_DEVICE_SINGLETHREADED);
+        REQUIRE(flags & D3D11_CREATE_DEVICE_BGRA_SUPPORT);
+        REQUIRE(flags & D3D11_CREATE_DEVICE_VIDEO_SUPPORT);
     }
 
 #if !defined(QT_OPENGL_LIB)
@@ -140,6 +148,8 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx
         EGLDisplay es_display = eglGetPlatformDisplayEXT(EGL_PLATFORM_DEVICE_EXT, es_device, nullptr);
         if (es_display == EGL_NO_DISPLAY)
             FAIL(eglGetError());
+        EGLint versions[2]{};
+        REQUIRE(eglInitialize(es_display, versions + 0, versions + 1));
         REQUIRE(eglTerminate(es_display));
     }
 #endif
@@ -151,7 +161,7 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx
             FAIL(eglGetError());
         EGLint version[2];
         REQUIRE(eglInitialize(es_display, version + 0, version + 1));
-        //REQUIRE(eglTerminate(es_display));
+        REQUIRE(eglTerminate(es_display));
     }
     SECTION("eglGetPlatformDisplayEXT(EGL_D3D11_ONLY_DISPLAY_ANGLE)") {
         EGLDisplay es_display =
@@ -160,7 +170,7 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx
             FAIL(eglGetError());
         EGLint version[2];
         REQUIRE(eglInitialize(es_display, version + 0, version + 1));
-        //REQUIRE(eglTerminate(es_display));
+        REQUIRE(eglTerminate(es_display));
     }
 }
 
@@ -199,27 +209,6 @@ void make_egl_config(EGLDisplay display, EGLConfig& config) {
     REQUIRE(eglBindAPI(EGL_OPENGL_ES_API));
 }
 
-void make_client_egl_surface(EGLDisplay display, EGLConfig config, ID3D11Texture2D* texture, EGLSurface& surface) {
-    com_ptr<IDXGIResource> resource{};
-    REQUIRE(texture->QueryInterface(resource.put()) == S_OK);
-    HANDLE handle{};
-    REQUIRE(resource->GetSharedHandle(&handle) == S_OK);
-    D3D11_TEXTURE2D_DESC desc{};
-    texture->GetDesc(&desc);
-    EGLint attrs[]{EGL_WIDTH,
-                   gsl::narrow_cast<EGLint>(desc.Width),
-                   EGL_HEIGHT,
-                   gsl::narrow_cast<EGLint>(desc.Height),
-                   EGL_TEXTURE_TARGET,
-                   EGL_TEXTURE_2D,
-                   EGL_TEXTURE_FORMAT,
-                   EGL_TEXTURE_RGBA,
-                   EGL_NONE};
-    surface = eglCreatePbufferFromClientBuffer(display, EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE, handle, config, attrs);
-    if (surface == EGL_NO_SURFACE)
-        FAIL(eglGetError());
-}
-
 /// @see https://docs.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-devices-layers
 HRESULT make_device_and_context(ID3D11Device** device, ID3D11DeviceContext** context, D3D_FEATURE_LEVEL& level) {
     com_ptr<IDXGIFactory> dxgi = nullptr;
@@ -246,7 +235,7 @@ class ID3D11Texture2DTestCase1 {
     ID3D11Texture2DTestCase1() noexcept(false) {
         REQUIRE(CoCreateInstance(CLSID_WICImagingFactory, NULL, //
                                  CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.put())) == S_OK);
-        if (auto hr = make_device_and_context(device.put(), device_context.put(), level))
+        if (auto hr = make_device_and_context(device.put(), device_context.put(), level); FAILED(hr))
             FAIL(hr);
     }
 };
@@ -369,6 +358,27 @@ SCENARIO_METHOD(ID3D11Texture2DTestCase1, "CreateWICTextureFromFile", "[directx]
     }
 }
 
+void make_client_egl_surface(EGLDisplay display, EGLConfig config, ID3D11Texture2D* texture, EGLSurface& surface) {
+    com_ptr<IDXGIResource> resource{};
+    REQUIRE(texture->QueryInterface(resource.put()) == S_OK);
+    HANDLE handle{};
+    REQUIRE(resource->GetSharedHandle(&handle) == S_OK);
+    D3D11_TEXTURE2D_DESC desc{};
+    texture->GetDesc(&desc);
+    EGLint attrs[]{EGL_WIDTH,
+                   gsl::narrow_cast<EGLint>(desc.Width),
+                   EGL_HEIGHT,
+                   gsl::narrow_cast<EGLint>(desc.Height),
+                   EGL_TEXTURE_TARGET,
+                   EGL_TEXTURE_2D,
+                   EGL_TEXTURE_FORMAT,
+                   EGL_TEXTURE_RGBA,
+                   EGL_NONE};
+    surface = eglCreatePbufferFromClientBuffer(display, EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE, handle, config, attrs);
+    if (surface == EGL_NO_SURFACE)
+        FAIL(eglGetError());
+}
+
 HRESULT make_test_texture2D(ID3D11Device* device, D3D11_TEXTURE2D_DESC& info, ID3D11Texture2D** texture) {
     info.Width = 640;
     info.Height = 480;
@@ -392,7 +402,8 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D to EGLImage", "[dire
     REQUIRE(texture);
 
     EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    //auto on_return_2 = gsl::finally([es_display]() { REQUIRE(eglTerminate(es_display)); });
+    REQUIRE(eglInitialize(es_display, nullptr, nullptr));
+    auto on_return_2 = gsl::finally([es_display]() { eglTerminate(es_display); });
 
     EGLConfig es_config{};
     make_egl_config(es_display, es_config);
@@ -476,6 +487,5 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D to EGLImage", "[dire
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     }
 }
-
 
 /// @todo https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLStreamTest.cpp

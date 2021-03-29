@@ -58,18 +58,18 @@ void print1(EGLDisplay display, EGLConfig config) {
     if (eglGetConfigAttrib(display, config, attribute, &value) == EGL_FALSE)                                           \
         spdlog::debug("    {} --> {}", #attribute, eglGetError()); /* required for both debug and state clear */       \
     else {                                                                                                             \
-        spdlog::info("    {}: {}", #attribute, value);                                                                 \
+        spdlog::debug("    {}: {}", #attribute, value);                                                                \
         value = 0;                                                                                                     \
     }
-    //PRINT_IF_SUPPORTED(EGL_CONFIG_CAVEAT)
-    //PRINT_IF_SUPPORTED(EGL_NATIVE_VISUAL_ID)
-    //PRINT_IF_SUPPORTED(EGL_NATIVE_VISUAL_TYPE)
+    // PRINT_IF_SUPPORTED(EGL_CONFIG_CAVEAT)
+    // PRINT_IF_SUPPORTED(EGL_NATIVE_VISUAL_ID)
+    // PRINT_IF_SUPPORTED(EGL_NATIVE_VISUAL_TYPE)
     PRINT_IF_SUPPORTED(EGL_SURFACE_TYPE)
-    //PRINT_IF_SUPPORTED(EGL_TRANSPARENT_TYPE)
+    // PRINT_IF_SUPPORTED(EGL_TRANSPARENT_TYPE)
     PRINT_IF_SUPPORTED(EGL_SAMPLES)
     PRINT_IF_SUPPORTED(EGL_MAX_PBUFFER_WIDTH)
     PRINT_IF_SUPPORTED(EGL_MAX_PBUFFER_HEIGHT)
-    //PRINT_IF_SUPPORTED(EGL_MAX_PBUFFER_PIXELS)
+    // PRINT_IF_SUPPORTED(EGL_MAX_PBUFFER_PIXELS)
     PRINT_IF_SUPPORTED(EGL_BLUE_SIZE)
     PRINT_IF_SUPPORTED(EGL_GREEN_SIZE)
     PRINT_IF_SUPPORTED(EGL_RED_SIZE)

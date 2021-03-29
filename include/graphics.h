@@ -2,6 +2,25 @@
  * @author Park DongHa (luncliff@gmail.com)
  */
 #pragma once
+// clang-format off
+#if defined(FORCE_STATIC_LINK)
+#   define _INTERFACE_
+#   define _HIDDEN_
+#elif defined(_MSC_VER) // MSVC or clang-cl
+#   define _HIDDEN_
+#   ifdef _WINDLL
+#       define _INTERFACE_ __declspec(dllexport)
+#   else
+#       define _INTERFACE_ __declspec(dllimport)
+#   endif
+#elif defined(__GNUC__) || defined(__clang__)
+#   define _INTERFACE_ __attribute__((visibility("default")))
+#   define _HIDDEN_ __attribute__((visibility("hidden")))
+#else
+#   error "unexpected linking configuration"
+#endif
+// clang-format on
+
 #include <gsl/gsl>
 #include <winrt/Windows.Foundation.h>
 
@@ -13,7 +32,6 @@
 #if __has_include(<vulkan/vulkan.h>)
 #  include <vulkan/vulkan.h>
 #endif
-
 #if __has_include(<QtOpenGL/qgl.h>) // from Qt5::OpenGL
 #  include <QtOpenGL/qgl.h>
 #  include <QtOpenGL/qglfunctions.h>
@@ -45,9 +63,14 @@
  */
 std::error_category& get_opengl_category() noexcept;
 
-class egl_context_t final {
+/**
+ * @brief `EGLContext` and `EGLSurface` owner.
+ *        Bind/unbind with `EGLNativeWindowType` using `resume`/`suspend` 
+ * @see   https://www.saschawillems.de/blog/2015/04/19/using-opengl-es-on-windows-desktops-via-egl/
+ */
+class _INTERFACE_ egl_context_t final {
   private:
-    gsl::owner<EGLDisplay> display = EGL_NO_DISPLAY; // this will be EGL_NO_DISPLAY when `terminate`d
+    EGLDisplay display = EGL_NO_DISPLAY; // this will be EGL_NO_DISPLAY when `terminate`d
     uint16_t major = 0, minor = 0;
     gsl::owner<EGLContext> context = EGL_NO_CONTEXT;
     EGLConfig configs[3]{};
@@ -99,6 +122,8 @@ class egl_context_t final {
      * @see eglCreateWindowSurface
      * @see eglQuerySurface
      * @see eglMakeCurrent
+     * @todo    https://github.com/google/angle/blob/master/extensions/EGL_ANGLE_direct_composition.txt
+     * @todo    support eglCreatePlatformWindowSurface?
      */
     EGLint resume(gsl::not_null<EGLNativeWindowType> window) noexcept;
 
@@ -120,6 +145,8 @@ class egl_context_t final {
      * @see terminate
      */
     EGLint swap() noexcept;
+
+    EGLContext handle() const noexcept;
 
   private:
     static EGLint get_configs(EGLDisplay display, EGLConfig* configs, EGLint& count) noexcept;

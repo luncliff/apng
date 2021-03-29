@@ -26,7 +26,6 @@ add_library(graphics
 set_target_properties(graphics
 PROPERTIES
     CXX_STANDARD 17
-    WINDOWS_EXPORT_ALL_SYMBOLS  true # todo: remove this
     PUBLIC_HEADER include/graphics.h
 )
 
@@ -81,6 +80,17 @@ PUBLIC
     WIN32_LEAN_AND_MEAN NOMINMAX
     GL_GLEXT_PROTOTYPES EGL_EGLEXT_PROTOTYPES
 )
+if(BUILD_SHARED_LIBS) # control dllexport/import
+    target_compile_definitions(graphics
+    PRIVATE
+        _WINDLL
+    )
+else()
+    target_compile_definitions(graphics
+    PRIVATE
+        FORCE_STATIC_LINK
+    )
+endif()
 
 if(DEFINED ENV{Qt5_DIR} OR DEFINED Qt5_DIR)
     list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
