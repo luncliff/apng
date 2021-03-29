@@ -248,5 +248,8 @@ class _INTERFACE_ pbo_writer_t final {
      */
     GLenum is_valid() const noexcept;
 
+    /// @see GL_TEXTURE_2D
+    GLenum unpack(uint16_t idx, GLuint tex2d, const GLint frame[4], //
+                  GLenum format = GL_RGBA, GLenum type = GL_UNSIGNED_BYTE) noexcept;
     GLenum map_and_invoke(uint16_t idx, writer_callback_t callback, void* user_data) noexcept;
 };

@@ -108,3 +108,20 @@ GLenum pbo_writer_t::map_and_invoke(uint16_t idx, writer_callback_t callback, vo
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     return glGetError();
 }
+
+GLenum pbo_writer_t::unpack(uint16_t idx, GLuint tex2d, const GLint frame[4], //
+                            GLenum format, GLenum type) noexcept {
+    spdlog::trace(__FUNCTION__);
+    if (idx >= capacity)
+        return GL_INVALID_VALUE;
+    GLenum ec = GL_NO_ERROR;
+    glBindTexture(GL_TEXTURE_2D, tex2d);
+    if (ec = glGetError())
+        return ec;
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbos[idx]);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, frame[0], frame[1], frame[2], frame[3], format, type, 0);
+    if (ec = glGetError())
+        spdlog::warn("tex sub image failed: {}", pbos[idx]);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    return ec ? ec : glGetError();
+}
