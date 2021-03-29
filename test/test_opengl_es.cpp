@@ -118,11 +118,33 @@ TEST_CASE("EGL_EXTENSIONS", "[egl][!mayfail]") {
     REQUIRE(eglBindAPI(EGL_OPENGL_ES_API));
     SECTION("KHR") {
         CHECK(has_extension(es_display, "EGL_KHR_gl_texture_2D_image"));
+        // https://www.khronos.org/registry/EGL/extensions/KHR/EGL_KHR_fence_sync.txt
         CHECK(has_extension(es_display, "EGL_KHR_fence_sync"));
+        // https://www.khronos.org/registry/EGL/extensions/KHR/EGL_KHR_wait_sync.txt
+        CHECK(has_extension(es_display, "EGL_KHR_wait_sync"));
     }
     SECTION("ANGLE") {
         CHECK(has_extension(es_display, "EGL_ANGLE_d3d_share_handle_client_buffer"));
         CHECK(has_extension(es_display, "EGL_ANGLE_surface_d3d_texture_2d_share_handle"));
+    }
+}
+
+TEST_CASE("EGL_KHR_fence_sync/EGL_KHR_wait_sync", "[egl][!mayfail]") {
+    EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+
+    egl_context_t context{es_display, EGL_NO_CONTEXT};
+    REQUIRE(context.is_valid());
+    REQUIRE(context.suspend() == EGL_SUCCESS); // the context is NOT bound
+
+    REQUIRE(es_display == eglGetCurrentDisplay());
+    // some version may not support these extensions...
+    REQUIRE(has_extension(es_display, "EGL_KHR_fence_sync"));
+    REQUIRE(has_extension(es_display, "EGL_KHR_wait_sync"));
+
+    SECTION("EGL_SYNC_FENCE") {
+        EGLSync fence = eglCreateSync(es_display, EGL_SYNC_FENCE, nullptr);
+        REQUIRE(fence);
+        REQUIRE(eglDestroySync(es_display, fence));
     }
 }
 

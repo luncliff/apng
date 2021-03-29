@@ -14,10 +14,8 @@ endif()
 
 add_library(graphics
     include/graphics.h
-    src/main.cpp
-    src/context.cpp
-    src/programs.cpp
-    src/pbo.cpp
+    src/main.cpp src/context.cpp
+    src/programs.cpp src/pbo.cpp src/sync.cpp
     # src/opengl_1.h
     # src/opengl.cpp
     # src/opengl_es.cpp
