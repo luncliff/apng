@@ -25,7 +25,6 @@ add_library(graphics
 set_target_properties(graphics
 PROPERTIES
     CXX_STANDARD 17
-    WINDOWS_EXPORT_ALL_SYMBOLS  true # todo: remove this
     PUBLIC_HEADER include/graphics.h
 )
 
@@ -80,6 +79,17 @@ PUBLIC
     WIN32_LEAN_AND_MEAN NOMINMAX
     GL_GLEXT_PROTOTYPES EGL_EGLEXT_PROTOTYPES
 )
+if(BUILD_SHARED_LIBS) # control dllexport/import
+    target_compile_definitions(graphics
+    PRIVATE
+        _WINDLL
+    )
+else()
+    target_compile_definitions(graphics
+    PRIVATE
+        FORCE_STATIC_LINK
+    )
+endif()
 
 if(DEFINED ENV{Qt5_DIR} OR DEFINED Qt5_DIR)
     list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
@@ -160,19 +170,19 @@ find_package(Catch2 CONFIG REQUIRED)
 
 add_executable(graphics_test_suite
     test/test_main.cpp
-    # test/test_gltf.cpp
+    test/test_gltf.cpp
     test/test_directx.cpp
-    # test/test_opengl_es.cpp
+    test/test_opengl_es.cpp
     # test/test_vulkan_device.cpp
     # test/test_vulkan_surface_glfw.cpp
     # test/test_vulkan_pipeline.cpp
     # test/test_vulkan_descriptor_set.cpp
 )
 if(QtANGLE_FOUND)
-    # target_sources(graphics_test_suite
-    # PRIVATE
-    #     test/test_qt5.cpp
-    # )
+    target_sources(graphics_test_suite
+    PRIVATE
+        test/test_qt5.cpp
+    )
 endif()
 # add_dependencies(graphics_test_suite compile_shaders_glsl)
 

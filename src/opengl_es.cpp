@@ -52,7 +52,6 @@ egl_helper_t::~egl_helper_t() noexcept {
         eglTerminate(display);
 }
 
-/// @see https://www.saschawillems.de/blog/2015/04/19/using-opengl-es-on-windows-desktops-via-egl/
 egl_helper_t::egl_helper_t(EGLNativeWindowType native, bool is_console) noexcept(false)
     : native_window{native}, native_display{GetDC(native)} {
     {

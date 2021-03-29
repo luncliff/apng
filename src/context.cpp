@@ -70,7 +70,8 @@ EGLint egl_context_t::resume(gsl::not_null<EGLNativeWindowType> window) noexcept
         return EGL_NOT_INITIALIZED;
 
     // create surface with the window
-    surface = eglCreateWindowSurface(display, configs[0], window, NULL);
+    EGLint* attrs = nullptr;
+    surface = eglCreateWindowSurface(display, configs[0], window, attrs);
     if (surface == EGL_NO_SURFACE)
         return eglGetError(); /// @todo the value can be EGL_SUCCESS. Check the available cases
 
@@ -155,6 +156,10 @@ EGLint egl_context_t::swap() noexcept {
     default:
         return ec; // EGL_BAD_SURFACE and the others ...
     }
+}
+
+EGLContext egl_context_t::handle() const noexcept {
+    return context;
 }
 
 EGLint egl_context_t::get_configs(EGLDisplay display, EGLConfig* configs, EGLint& count) noexcept {
