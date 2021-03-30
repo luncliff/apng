@@ -61,7 +61,7 @@ bool egl_context_t::is_valid() const noexcept {
 
 egl_context_t::~egl_context_t() noexcept {
     spdlog::debug(__FUNCTION__);
-    terminate();
+    destroy();
 }
 
 EGLint egl_context_t::resume(gsl::owner<EGLSurface> es_surface, EGLConfig) noexcept {
@@ -132,7 +132,7 @@ EGLint egl_context_t::suspend() noexcept {
     return EGL_SUCCESS;
 }
 
-void egl_context_t::terminate() noexcept {
+void egl_context_t::destroy() noexcept {
     spdlog::trace(__FUNCTION__);
     if (display == EGL_NO_DISPLAY) // already terminated
         return;

@@ -113,7 +113,7 @@ class _INTERFACE_ egl_context_t final {
      * @see eglDestroySurface
      * @see eglTerminate(unused) https://www.khronos.org/registry/EGL/sdk/docs/man/html/eglTerminate.xhtml
      */
-    void terminate() noexcept;
+    void destroy() noexcept;
 
     /**
      * @brief   Create EGLSurface with given EGLNativeWindowType and bind with EGLContext
@@ -126,6 +126,14 @@ class _INTERFACE_ egl_context_t final {
      * @todo    support eglCreatePlatformWindowSurface?
      */
     EGLint resume(gsl::not_null<EGLNativeWindowType> window) noexcept;
+
+    /**
+     * @brief   Take ownership of the given EGLSurface
+     * 
+     * @param es_surface  Expect PBufferSurface.
+     * @param es_config   Hint to prevent misuse of `resume(EGLNativeWindowType)`. 
+     *                    Always ignored. 
+     */
     EGLint resume(gsl::owner<EGLSurface> es_surface, EGLConfig es_config) noexcept;
 
     /**

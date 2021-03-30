@@ -231,7 +231,7 @@ TEST_CASE("EGLContext - PixelBuffer Surface", "[egl]") {
     REQUIRE(eglGetCurrentSurface(EGL_READ) == es_surface);
     REQUIRE(eglGetCurrentSurface(EGL_DRAW) == es_surface);
 
-    context.terminate();
+    context.destroy();
     REQUIRE(eglTerminate(es_display));
 }
 
