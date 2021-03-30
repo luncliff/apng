@@ -79,33 +79,54 @@ void print_info(EGLDisplay display) {
 }
 
 TEST_CASE("EGLContext setup/teardown", "[egl]") {
-    EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    REQUIRE(eglGetError() == EGL_SUCCESS);
-
+    EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     EGLint major = 0, minor = 0;
-    REQUIRE(eglInitialize(display, &major, &minor) == EGL_TRUE);
-    REQUIRE(eglGetError() == EGL_SUCCESS);
-    auto on_return1 = gsl::finally([display]() {
-        REQUIRE(eglTerminate(display)); // ...
-    });
+    REQUIRE(eglInitialize(es_display, &major, &minor));
+    auto on_return_1 = gsl::finally([es_display]() { REQUIRE(eglTerminate(es_display)); });
+
     REQUIRE(eglBindAPI(EGL_OPENGL_ES_API));
-    print_info(display);
+    print_info(es_display);
 
     EGLint count = 0;
-    EGLConfig configs[10]{};
-    eglChooseConfig(display, nullptr, configs, 10, &count);
+    EGLConfig es_configs[10]{};
+    eglChooseConfig(es_display, nullptr, es_configs, 10, &count);
     REQUIRE(eglGetError() == EGL_SUCCESS);
 
-    // OpenGL ES 3.0
-    const EGLint attrs[] = {EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 0, EGL_NONE};
-    const EGLContext context = eglCreateContext(display, configs[0], EGL_NO_CONTEXT, attrs);
+    // Request OpenGL ES 3.x Debug mode
+    EGLint attrs[]{EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_OPENGL_DEBUG, EGL_TRUE, EGL_NONE};
+    EGLContext es_context = eglCreateContext(es_display, es_configs[0], EGL_NO_CONTEXT, attrs);
+    if (es_context == EGL_NO_CONTEXT)
+        FAIL(eglGetError());
+    REQUIRE(eglMakeCurrent(es_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT));
+    eglDestroyContext(es_display, es_context);
     REQUIRE(eglGetError() == EGL_SUCCESS);
-    auto on_return2 = gsl::finally([display, context]() {
-        eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-        REQUIRE(eglGetError() == EGL_SUCCESS);
-        eglDestroyContext(display, context);
-        REQUIRE(eglGetError() == EGL_SUCCESS);
-    });
+}
+
+TEST_CASE("GL_FRAMEBUFFER_UNDEFINED", "[egl]") {
+    EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    EGLint es_minor = 0;
+    REQUIRE(eglInitialize(es_display, nullptr, &es_minor));
+    auto on_return_1 = gsl::finally([es_display]() { REQUIRE(eglTerminate(es_display)); });
+
+    if (es_minor < 5) {
+        WARN("Need EGL 1.5+", eglQueryString(es_display, EGL_VERSION));
+        return;
+    }
+
+    EGLint count = 0;
+    EGLConfig es_configs[3]{};
+    REQUIRE(eglChooseConfig(es_display, nullptr, es_configs, 3, &count));
+
+    // Request OpenGL ES 3.x Debug mode
+    EGLint attrs[]{EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_OPENGL_DEBUG, EGL_TRUE, EGL_NONE};
+    EGLContext es_context = eglCreateContext(es_display, es_configs[0], EGL_NO_CONTEXT, attrs);
+    if (es_context == EGL_NO_CONTEXT)
+        FAIL(eglGetError());
+
+    if (eglMakeCurrent(es_display, EGL_NO_SURFACE, EGL_NO_SURFACE, es_context) == false)
+        FAIL(eglGetError());
+    REQUIRE(glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) == GL_FRAMEBUFFER_UNDEFINED);
+    REQUIRE(eglMakeCurrent(es_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT));
 }
 
 TEST_CASE("EGL_EXTENSIONS", "[egl][!mayfail]") {
@@ -113,7 +134,7 @@ TEST_CASE("EGL_EXTENSIONS", "[egl][!mayfail]") {
     EGLint versions[2]{};
     REQUIRE(eglInitialize(es_display, versions + 0, versions + 1) == EGL_TRUE);
     REQUIRE(eglGetError() == EGL_SUCCESS);
-    auto on_return1 = gsl::finally([es_display]() { REQUIRE(eglTerminate(es_display)); });
+    auto on_return_1 = gsl::finally([es_display]() { REQUIRE(eglTerminate(es_display)); });
 
     REQUIRE(eglBindAPI(EGL_OPENGL_ES_API));
     SECTION("KHR") {
@@ -126,22 +147,109 @@ TEST_CASE("EGL_EXTENSIONS", "[egl][!mayfail]") {
     }
 }
 
+void setup_egl_config(EGLDisplay display, EGLConfig& config, EGLint& minor) {
+    EGLint versions[2]{};
+    REQUIRE(eglInitialize(display, versions + 0, versions + 1));
+    minor = versions[1];
+
+    EGLint count = 0;
+    EGLint attrs[]{EGL_SURFACE_TYPE,
+                   EGL_PBUFFER_BIT, // 1
+                   EGL_RENDERABLE_TYPE,
+                   EGL_OPENGL_ES2_BIT, // 3
+                   EGL_DEPTH_SIZE,
+                   16, // 5
+                   EGL_BLUE_SIZE,
+                   8,
+                   EGL_GREEN_SIZE,
+                   8,
+                   EGL_RED_SIZE,
+                   8,
+                   EGL_ALPHA_SIZE,
+                   8,
+                   EGL_NONE};
+    // for 1.5+
+    if (minor >= 5) {
+        attrs[3] |= EGL_OPENGL_ES3_BIT;
+        // ...
+    }
+    if (eglChooseConfig(display, attrs, &config, 1, &count) == false)
+        FAIL(eglGetError());
+}
+
+TEST_CASE("PixelBuffer Surface", "[egl]") {
+    EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    EGLConfig es_config = EGL_NO_CONFIG_KHR;
+    EGLint es_minor = 0;
+    setup_egl_config(es_display, es_config, es_minor);
+    auto on_return_1 = gsl::finally([es_display]() { REQUIRE(eglTerminate(es_display)); });
+
+    // see https://www.khronos.org/registry/EGL/sdk/docs/man/html/eglCreatePbufferSurface.xhtml
+    // EGL_GL_COLORSPACE requires 1.5+. Default is EGL_GL_COLORSPACE_SRGB // EGL_GL_COLORSPACE_LINEAR?
+    SECTION("RGB24(Simple)") {
+        EGLint attrs[]{// EGL_TEXTURE_TARGET,
+                       // EGL_TEXTURE_2D,
+                       // EGL_TEXTURE_FORMAT,
+                       // EGL_TEXTURE_RGB,
+                       // EGL_MIPMAP_TEXTURE,
+                       // EGL_FALSE,
+                       EGL_WIDTH, 512, EGL_HEIGHT, 512, EGL_NONE};
+        EGLSurface surface = eglCreatePbufferSurface(es_display, es_config, attrs);
+        if (surface == EGL_NO_SURFACE) {
+            auto ec = eglGetError();
+            FAIL(ec);
+        }
+        if (eglDestroySurface(es_display, surface) == false)
+            FAIL(eglGetError());
+    }
+    SECTION("RGBA32(Simple)") {
+        EGLint attrs[]{EGL_WIDTH, 512, EGL_HEIGHT, 512, EGL_NONE};
+        EGLSurface surface = eglCreatePbufferSurface(es_display, es_config, attrs);
+        if (surface == EGL_NO_SURFACE)
+            FAIL(eglGetError());
+        if (eglDestroySurface(es_display, surface) == false)
+            FAIL(eglGetError());
+    }
+}
+
+TEST_CASE("EGLContext - PixelBuffer Surface", "[egl]") {
+    EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    egl_context_t context{es_display, EGL_NO_CONTEXT};
+    REQUIRE(context.is_valid());
+
+    EGLint count = 1;
+    EGLConfig es_configs[1];
+    REQUIRE(context.get_configs(es_configs, count, nullptr) == 0);
+
+    EGLint attrs[]{EGL_WIDTH, 1024, EGL_HEIGHT, 512, EGL_NONE};
+    EGLSurface es_surface = eglCreatePbufferSurface(es_display, es_configs[0], attrs);
+    REQUIRE(eglGetError() == EGL_SUCCESS);
+
+    REQUIRE(context.resume(es_surface, es_configs[0]) == EGL_SUCCESS);
+    REQUIRE(context.surface_width == 1024);
+    REQUIRE(context.surface_height == 512);
+    REQUIRE(eglGetCurrentSurface(EGL_READ) == es_surface);
+    REQUIRE(eglGetCurrentSurface(EGL_DRAW) == es_surface);
+
+    context.terminate();
+    REQUIRE(eglTerminate(es_display));
+}
+
 /// @see https://support.microsoft.com/en-us/help/124103/how-to-obtain-a-console-window-handle-hwnd
-HWND get_hwnd_for_console() {
+HWND get_hwnd_for_console() noexcept {
     constexpr auto max_length = 800;
-    char title[max_length]{};
-    GetConsoleTitleA(title, max_length);
-    return FindWindowA(NULL, title);
+    wchar_t title[max_length]{};
+    GetConsoleTitleW(title, max_length);
+    return FindWindowW(NULL, title);
 }
 
 TEST_CASE("console window handle", "[windows][!mayfail]") {
-    HWND handle = get_hwnd_for_console();
-    if (handle == NULL)
+    if (get_hwnd_for_console() == NULL)
         FAIL("Faild to find HWND from console name");
 }
 
 TEST_CASE("EGLContext helper with Console", "[egl][!mayfail]") {
-    auto handle = get_hwnd_for_console();
+    HWND handle = get_hwnd_for_console();
     if (handle == NULL)
         FAIL("Faild to find HWND from console name");
 
@@ -254,21 +362,10 @@ TEST_CASE("EGLContext helper with Win32 HINSTANCE", "[egl][windows]") {
     win32_window_helper_t helper{};
     REQUIRE(helper.window);
 
-    const EGLContext es_context = eglGetCurrentContext();
-    REQUIRE(es_context == EGL_NO_CONTEXT);
-
-    egl_context_t context{eglGetDisplay(EGL_DEFAULT_DISPLAY), es_context};
+    egl_context_t context{eglGetDisplay(EGL_DEFAULT_DISPLAY), EGL_NO_CONTEXT};
     REQUIRE(context.is_valid());
     REQUIRE(context.resume(helper.window) == EGL_SUCCESS);
 
-    SECTION("GetString") {
-        spdlog::info("OpenGL(EGL_DEFAULT_DISPLAY):");
-        spdlog::info("  GL_VERSION: {:s}", glGetString(GL_VERSION));
-        spdlog::info("  GL_VENDOR: {:s}", glGetString(GL_VENDOR));
-        spdlog::info("  GL_RENDERER: {:s}", glGetString(GL_RENDERER));
-        spdlog::info("  GL_SHADING_LANGUAGE_VERSION: {:s}", glGetString(GL_SHADING_LANGUAGE_VERSION));
-        REQUIRE(glGetError() == GL_NO_ERROR);
-    }
     SECTION("fullspeed swap") {
         for (auto i = 0u; i < 256; ++i) {
             MSG msg{};
@@ -537,7 +634,7 @@ TEST_CASE_METHOD(glfw_test_case, "GL_PIXEL_PACK_BUFFER 2", "[opengl][glfw]") {
     };
 
     GLuint fbo = 0; // use current window
-    uint16_t count = 20;
+    uint16_t count = 10;
     while (--count) {
         auto const front = static_cast<uint16_t>((count + 1) % 2);
         auto const back = static_cast<uint16_t>(count % 2);
@@ -553,7 +650,7 @@ TEST_CASE_METHOD(glfw_test_case, "GL_PIXEL_PACK_BUFFER 2", "[opengl][glfw]") {
         if (auto ec = reader.pack(back, fbo, frame))
             FAIL(ec);
         // map the front buffer and read
-        if (count == 19) {
+        if (count == 9) {
             // if there was no read, the pixel buffer object is clean and must hold zero (0,0,0,0)
             // this is the first read, so it will be untouched
             if (auto ec = reader.map_and_invoke(front, is_untouched, nullptr))

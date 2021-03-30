@@ -2,6 +2,7 @@
  * @author Park DongHa (luncliff@gmail.com)
  * @see https://github.com/microsoft/angle/wiki
  * @see https://github.com/microsoft/DirectXTK/wiki/Getting-Started
+ * @todo https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLStreamTest.cpp
  */
 //#define CATCH_CONFIG_WINDOWS_CRTDBG
 #include <catch2/catch.hpp>
@@ -174,26 +175,6 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx
     }
 }
 
-void make_egl_config(EGLDisplay display, EGLConfig& config) {
-    EGLint count = 0;
-    EGLint attrs[]{EGL_RED_SIZE,
-                   8,
-                   EGL_GREEN_SIZE,
-                   8,
-                   EGL_BLUE_SIZE,
-                   8,
-                   EGL_ALPHA_SIZE,
-                   8,
-                   EGL_RENDERABLE_TYPE,
-                   EGL_OPENGL_ES3_BIT, // EGL_OPENGL_ES2_BIT
-                   EGL_SURFACE_TYPE,
-                   EGL_PBUFFER_BIT | EGL_WINDOW_BIT,
-                   EGL_NONE};
-    if (eglChooseConfig(display, attrs, &config, 1, &count) == false)
-        FAIL(eglGetError());
-    REQUIRE(count);
-}
-
 /// @brief Create an EGLDisplay using the EGLDevice
 /// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLDeviceTest.cpp
 /// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLPresentPathD3D11Test.cpp
@@ -359,12 +340,16 @@ SCENARIO_METHOD(ID3D11Texture2DTestCase1, "CreateWICTextureFromFile", "[directx]
 }
 
 void make_client_egl_surface(EGLDisplay display, EGLConfig config, ID3D11Texture2D* texture, EGLSurface& surface) {
+    REQUIRE(has_extension(display, "EGL_ANGLE_surface_d3d_texture_2d_share_handle"));
+
+    D3D11_TEXTURE2D_DESC desc{};
+    texture->GetDesc(&desc);
+
     com_ptr<IDXGIResource> resource{};
     REQUIRE(texture->QueryInterface(resource.put()) == S_OK);
     HANDLE handle{};
     REQUIRE(resource->GetSharedHandle(&handle) == S_OK);
-    D3D11_TEXTURE2D_DESC desc{};
-    texture->GetDesc(&desc);
+
     EGLint attrs[]{EGL_WIDTH,
                    gsl::narrow_cast<EGLint>(desc.Width),
                    EGL_HEIGHT,
@@ -379,58 +364,79 @@ void make_client_egl_surface(EGLDisplay display, EGLConfig config, ID3D11Texture
         FAIL(eglGetError());
 }
 
-HRESULT make_test_texture2D(ID3D11Device* device, D3D11_TEXTURE2D_DESC& info, ID3D11Texture2D** texture) {
-    info.Width = 640;
-    info.Height = 480;
-    info.MipLevels = info.ArraySize = 1;
-    info.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    info.SampleDesc.Count = 1;
-    info.SampleDesc.Quality = 0;
-    info.Usage = D3D11_USAGE_DEFAULT;
-    info.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-    info.CPUAccessFlags = 0;
-    info.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
-    return device->CreateTexture2D(&info, nullptr, texture);
-}
-
-/// @see https://github.com/google/angle/blob/master/util/EGLWindow.cpp
-/// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLPresentPathD3D11Test.cpp
-TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D to EGLImage", "[directx][!mayfail][egl][!mayfail]") {
-    D3D11_TEXTURE2D_DESC info{};
+class ID3D11Texture2DTestCase2 : public ID3D11Texture2DTestCase1 {
+  protected:
     com_ptr<ID3D11Texture2D> texture{};
-    REQUIRE(make_test_texture2D(device.get(), info, texture.put()) == S_OK);
-    REQUIRE(texture);
 
+  public:
+    ID3D11Texture2DTestCase2() noexcept(false) : ID3D11Texture2DTestCase1{} {
+        D3D11_TEXTURE2D_DESC info{};
+        info.Width = 640;
+        info.Height = 480;
+        info.MipLevels = info.ArraySize = 1;
+        info.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        info.SampleDesc.Count = 1;
+        info.SampleDesc.Quality = 0;
+        info.Usage = D3D11_USAGE_DEFAULT;
+        info.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+        info.CPUAccessFlags = 0;
+        info.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+        REQUIRE(device->CreateTexture2D(&info, nullptr, texture.put()) == S_OK);
+    }
+};
+void setup_egl_config(EGLDisplay display, EGLConfig& config, EGLint& minor);
+
+TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Texture2D to EGLSurface(eglCreatePbufferFromClientBuffer)",
+                 "[directx][!mayfail][egl]") {
     EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    REQUIRE(eglInitialize(es_display, nullptr, nullptr));
-    auto on_return_2 = gsl::finally([es_display]() { eglTerminate(es_display); });
+    EGLConfig es_config = EGL_NO_CONFIG_KHR;
+    EGLint es_minor = 0;
+    setup_egl_config(es_display, es_config, es_minor);
+    auto on_return_1 = gsl::finally([es_display]() { eglTerminate(es_display); });
 
-    EGLConfig es_config{};
-    make_egl_config(es_display, es_config);
-
-    EGLSurface es_surface = EGL_NO_SURFACE;
-    make_client_egl_surface(es_display, es_config, texture.get(), es_surface);
-    auto on_return_3 = gsl::finally([es_display, es_surface]() { REQUIRE(eglDestroySurface(es_display, es_surface)); });
-
-    // at least 3.0
     EGLint attrs[]{EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 0, EGL_NONE};
     EGLContext es_context = eglCreateContext(es_display, es_config, EGL_NO_CONTEXT, attrs);
     if (es_context == EGL_NO_CONTEXT)
         FAIL(eglGetError());
+    auto on_return_2 = gsl::finally([es_display, es_context]() { eglDestroyContext(es_display, es_context); });
 
-    THEN("Framebuffer status") {
-        // when EGL_NO_SURFACE, default framebuffer is undefined...?
-        //REQUIRE(glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) == GL_FRAMEBUFFER_UNDEFINED);
+    SECTION("GL_FRAMEBUFFER_COMPLETE") {
+        EGLSurface es_surface = EGL_NO_SURFACE;
+        make_client_egl_surface(es_display, es_config, texture.get(), es_surface);
+        auto on_return_3 =
+            gsl::finally([es_display, es_surface]() { REQUIRE(eglDestroySurface(es_display, es_surface)); });
+
         if (eglMakeCurrent(es_display, es_surface, es_surface, es_context) == false)
             FAIL(eglGetError());
         REQUIRE(glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
+        REQUIRE(eglMakeCurrent(es_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT));
     }
+}
+
+/// @see https://github.com/google/angle/blob/master/util/EGLWindow.cpp
+/// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLPresentPathD3D11Test.cpp
+TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Texture2D to EGLImage(eglBindTexImage)", "[directx][!mayfail][egl]") {
+    EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    EGLConfig es_config = EGL_NO_CONFIG_KHR;
+    EGLint es_minor = 0;
+    setup_egl_config(es_display, es_config, es_minor);
+    auto on_return_1 = gsl::finally([es_display]() { eglTerminate(es_display); });
+
+    EGLSurface es_surface = EGL_NO_SURFACE;
+    make_client_egl_surface(es_display, es_config, texture.get(), es_surface);
+    auto on_return_2 = gsl::finally([es_display, es_surface]() { eglDestroySurface(es_display, es_surface); });
+
+    EGLint attrs[]{EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 0, EGL_NONE};
+    EGLContext es_context = eglCreateContext(es_display, es_config, EGL_NO_CONTEXT, attrs);
+    if (es_context == EGL_NO_CONTEXT)
+        FAIL(eglGetError());
+    auto on_return_3 = gsl::finally([es_display, es_context]() { eglDestroyContext(es_display, es_context); });
 
     if (eglMakeCurrent(es_display, es_surface, es_surface, es_context) == false)
         FAIL(eglGetError());
     REQUIRE(glGetString(GL_VERSION));
 
-    THEN("bind to GL_TEXTURE_2D") {
+    SECTION("bind to GL_TEXTURE_2D") {
         constexpr GLenum target = GL_TEXTURE_2D;
         GLuint tex{};
         glGenTextures(1, &tex);
@@ -449,8 +455,7 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D to EGLImage", "[dire
         glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         REQUIRE(glGetError() == GL_NO_ERROR);
     }
-
-    THEN("bind to GL_FRAMEBUFFER") {
+    SECTION("bind to GL_FRAMEBUFFER") {
         GLuint tex{};
         glGenTextures(1, &tex);
         glBindTexture(GL_TEXTURE_2D, tex);
@@ -487,5 +492,3 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase1, "ID3D11Texture2D to EGLImage", "[dire
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     }
 }
-
-/// @todo https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLStreamTest.cpp
