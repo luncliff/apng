@@ -44,14 +44,14 @@ egl_context_t::egl_context_t(EGLDisplay display, EGLContext share_context) noexc
 
     // acquire EGLConfigs
     EGLint num_config = 3;
-    if (auto ec = get_configs(display, configs, num_config)) {
+    if (auto ec = get_configs(configs, num_config, nullptr)) {
         report_egl_error("eglChooseConfig", ec);
         return;
     }
+
     // create context for OpenGL ES 3.0+
     EGLint attrs[]{EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 0, EGL_NONE};
-    context = eglCreateContext(display, configs[0], share_context, attrs);
-    if (context != EGL_NO_CONTEXT)
+    if (context = eglCreateContext(display, configs[0], share_context, attrs); context != EGL_NO_CONTEXT)
         spdlog::debug("EGL create: context {} {}", context, share_context);
 }
 
@@ -64,6 +64,25 @@ egl_context_t::~egl_context_t() noexcept {
     terminate();
 }
 
+EGLint egl_context_t::resume(gsl::owner<EGLSurface> es_surface, EGLConfig) noexcept {
+    spdlog::trace(__FUNCTION__);
+    if (context == EGL_NO_CONTEXT)
+        return EGL_NOT_INITIALIZED;
+    if (es_surface == EGL_NO_SURFACE)
+        return GL_INVALID_VALUE;
+
+    surface = es_surface;
+    eglQuerySurface(display, surface, EGL_WIDTH, &surface_width);
+    eglQuerySurface(display, surface, EGL_HEIGHT, &surface_height);
+    if (auto ec = eglGetError(); ec != EGL_SUCCESS)
+        return report_egl_error("eglQuerySurface", ec);
+
+    spdlog::debug("EGL current: {}/{} {}", surface, surface, context);
+    if (eglMakeCurrent(display, surface, surface, context) == EGL_FALSE)
+        return report_egl_error("eglMakeCurrent", eglGetError());
+    return EGL_SUCCESS;
+}
+
 EGLint egl_context_t::resume(gsl::not_null<EGLNativeWindowType> window) noexcept {
     spdlog::trace(__FUNCTION__);
     if (context == EGL_NO_CONTEXT)
@@ -71,8 +90,7 @@ EGLint egl_context_t::resume(gsl::not_null<EGLNativeWindowType> window) noexcept
 
     // create surface with the window
     EGLint* attrs = nullptr;
-    surface = eglCreateWindowSurface(display, configs[0], window, attrs);
-    if (surface == EGL_NO_SURFACE)
+    if (surface = eglCreateWindowSurface(display, configs[0], window, attrs); surface == EGL_NO_SURFACE)
         return eglGetError(); /// @todo the value can be EGL_SUCCESS. Check the available cases
 
     // query some values for future debugging
@@ -94,12 +112,14 @@ EGLint egl_context_t::suspend() noexcept {
     if (context == EGL_NO_CONTEXT)
         return EGL_NOT_INITIALIZED;
 
-    // unbind surface
+    // unbind surface. OpenGL ES 3.1 will return true
     spdlog::debug("EGL current: EGL_NO_SURFACE/EGL_NO_SURFACE {}", context);
-    if (eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, context) == EGL_FALSE)
-        // GLES 3.0 will report error but ignore.
-        // we just want to make sure of unbind here...
+    if (eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, context) == EGL_FALSE) {
+        // OpenGL ES 3.0 will report error. consume it
+        // then unbind both surface and context.
         report_egl_error("eglMakeCurrent", eglGetError());
+        eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    }
 
     // destroy known surface
     if (surface != EGL_NO_SURFACE) {
@@ -163,19 +183,16 @@ EGLContext egl_context_t::handle() const noexcept {
     return context;
 }
 
-EGLint egl_context_t::get_configs(EGLDisplay display, EGLConfig* configs, EGLint& count) noexcept {
-    // clang-format off
-    //constexpr auto color_size = 8;
-    //constexpr auto depth_size = 24;
-    //EGLint attrs[]{EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-    //               EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-    //               EGL_BLUE_SIZE, color_size, // 8
-    //               EGL_GREEN_SIZE, color_size, // 8
-    //               EGL_RED_SIZE, color_size, // 8
-    //               EGL_DEPTH_SIZE, depth_size, // 24
-    //               EGL_NONE};
-    // clang-format on
-    if (eglChooseConfig(display, nullptr, configs, count, &count) == EGL_FALSE)
+EGLint egl_context_t::get_configs(EGLConfig* configs, EGLint& count, const EGLint* attrs) const noexcept {
+    constexpr auto color_size = 8;
+    constexpr auto depth_size = 16;
+    EGLint backup_attrs[]{EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT, EGL_SURFACE_TYPE, EGL_WINDOW_BIT | EGL_PBUFFER_BIT,
+                          EGL_BLUE_SIZE,       color_size,         EGL_GREEN_SIZE,   color_size,
+                          EGL_RED_SIZE,        color_size,         EGL_ALPHA_SIZE,   color_size,
+                          EGL_DEPTH_SIZE,      depth_size,         EGL_NONE};
+    if (attrs == nullptr)
+        attrs = backup_attrs;
+    if (eglChooseConfig(this->display, attrs, configs, count, &count) == EGL_FALSE)
         return eglGetError();
     return 0;
 }

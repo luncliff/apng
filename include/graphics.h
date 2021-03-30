@@ -20,10 +20,7 @@
 #   error "unexpected linking configuration"
 #endif
 // clang-format on
-
 #include <gsl/gsl>
-#include <winrt/Windows.Foundation.h>
-
 #include <filesystem>
 #include <memory_resource>
 #include <string_view>
@@ -129,6 +126,7 @@ class _INTERFACE_ egl_context_t final {
      * @todo    support eglCreatePlatformWindowSurface?
      */
     EGLint resume(gsl::not_null<EGLNativeWindowType> window) noexcept;
+    EGLint resume(gsl::owner<EGLSurface> es_surface, EGLConfig es_config) noexcept;
 
     /**
      * @brief   Unbind EGLSurface and EGLContext.
@@ -151,8 +149,7 @@ class _INTERFACE_ egl_context_t final {
 
     EGLContext handle() const noexcept;
 
-  private:
-    static EGLint get_configs(EGLDisplay display, EGLConfig* configs, EGLint& count) noexcept;
+    EGLint get_configs(EGLConfig* configs, EGLint& count, const EGLint* attrs = nullptr) const noexcept;
 };
 
 /// @see memcpy
