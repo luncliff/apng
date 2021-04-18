@@ -95,6 +95,7 @@ pbo_writer_t::~pbo_writer_t() noexcept {
         spdlog::error("{} {}", __FUNCTION__, get_opengl_category().message(ec));
 }
 
+/// @todo GL_MAP_UNSYNCHRONIZED_BIT?
 GLenum pbo_writer_t::map_and_invoke(uint16_t idx, writer_callback_t callback, void* user_data) noexcept {
     spdlog::trace(__FUNCTION__);
     if (idx >= capacity)

@@ -14,10 +14,8 @@ endif()
 
 add_library(graphics
     include/graphics.h
-    src/main.cpp
-    src/context.cpp
-    src/programs.cpp
-    src/pbo.cpp
+    src/main.cpp src/context.cpp
+    src/programs.cpp src/pbo.cpp src/sync.cpp
     # src/opengl_1.h
     # src/opengl.cpp
     # src/opengl_es.cpp
@@ -31,9 +29,13 @@ PROPERTIES
 
 find_package(spdlog CONFIG REQUIRED)
 find_package(Microsoft.GSL CONFIG REQUIRED)
-find_package(nlohmann_json CONFIG REQUIRED) # find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
+find_package(nlohmann_json CONFIG REQUIRED)
+find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
+
+find_package(directx-headers CONFIG REQUIRED)
 find_package(directxtk CONFIG REQUIRED)
 find_package(directxtex CONFIG REQUIRED)
+find_package(directxmath CONFIG REQUIRED)
 
 target_include_directories(graphics
 PUBLIC
@@ -215,6 +217,7 @@ PRIVATE
 )
 
 add_test(NAME test_egl COMMAND graphics_test_suite "[egl]")
+add_test(NAME test_opengl COMMAND graphics_test_suite "[opengl]")
 add_test(NAME test_windows COMMAND graphics_test_suite "[windows]")
 add_test(NAME test_directx COMMAND graphics_test_suite "[directx]")
 if(Vulkan_FOUND)
@@ -222,5 +225,5 @@ if(Vulkan_FOUND)
 endif()
 
 install(TARGETS  graphics_test_suite
-        RUNTIME  DESTINATION bin
+        RUNTIME  DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
 )

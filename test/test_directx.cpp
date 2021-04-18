@@ -389,7 +389,7 @@ void setup_egl_config(EGLDisplay display, EGLConfig& config, EGLint& minor);
 TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Texture2D to EGLSurface(eglCreatePbufferFromClientBuffer)",
                  "[directx][!mayfail][egl]") {
     EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    EGLConfig es_config = EGL_NO_CONFIG_KHR;
+    EGLConfig es_config{};
     EGLint es_minor = 0;
     setup_egl_config(es_display, es_config, es_minor);
     auto on_return_1 = gsl::finally([es_display]() { eglTerminate(es_display); });
@@ -417,7 +417,7 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Texture2D to EGLSurface(eglCreatePbu
 /// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLPresentPathD3D11Test.cpp
 TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Texture2D to EGLImage(eglBindTexImage)", "[directx][!mayfail][egl]") {
     EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    EGLConfig es_config = EGL_NO_CONFIG_KHR;
+    EGLConfig es_config{};
     EGLint es_minor = 0;
     setup_egl_config(es_display, es_config, es_minor);
     auto on_return_1 = gsl::finally([es_display]() { eglTerminate(es_display); });

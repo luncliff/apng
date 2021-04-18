@@ -152,7 +152,7 @@ void egl_context_t::destroy() noexcept {
     }
     // destroy known surface
     if (surface != EGL_NO_SURFACE) {
-        spdlog::warn("EGL destroy:surface {}", surface);
+        spdlog::warn("EGL destroy: surface {}", surface);
         if (eglDestroySurface(display, surface) == EGL_FALSE)
             report_egl_error("eglDestroySurface", eglGetError());
         surface = EGL_NO_SURFACE;
@@ -172,7 +172,7 @@ EGLint egl_context_t::swap() noexcept {
     switch (const auto ec = eglGetError()) {
     case EGL_BAD_CONTEXT:
     case EGL_CONTEXT_LOST:
-        terminate();
+        destroy();
         [[fallthrough]];
     default:
         return ec; // EGL_BAD_SURFACE and the others ...
