@@ -14,11 +14,6 @@
       "ctestCommandArgs": "",
       "variables": [
         {
-          "name": "CMAKE_TOOLCHAIN_FILE",
-          "value": "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake",
-          "type": "PATH"
-        },
-        {
           "name": "VCPKG_TARGET_TRIPLET",
           "value": "x64-windows",
           "type": "STRING"
@@ -30,10 +25,11 @@
         },
         {
           "name": "Qt5_DIR",
-          "value": "C:\\Qt\\5.15.1\\msvc2019_64\\lib\\cmake\\Qt5",
+          "value": "C:\\Qt\\5.15.2\\msvc2019_64\\lib\\cmake\\Qt5",
           "type": "STRING"
         }
-      ]
+      ],
+      "cmakeToolchain": "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
     },
     {
       "name": "x64-Debug",
@@ -49,11 +45,6 @@
       "ctestCommandArgs": "",
       "variables": [
         {
-          "name": "CMAKE_TOOLCHAIN_FILE",
-          "value": "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake",
-          "type": "PATH"
-        },
-        {
           "name": "VCPKG_TARGET_TRIPLET",
           "value": "x64-windows",
           "type": "STRING"
@@ -63,10 +54,11 @@
           "value": "true",
           "type": "BOOL"
         }
-      ]
+      ],
+      "cmakeToolchain": "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
     },
     {
-      "name": "x64-Release",
+      "name": "x64-Release-Qt5",
       "generator": "Ninja",
       "configurationType": "Release",
       "inheritEnvironments": [
@@ -79,11 +71,6 @@
       "ctestCommandArgs": "",
       "variables": [
         {
-          "name": "CMAKE_TOOLCHAIN_FILE",
-          "value": "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake",
-          "type": "PATH"
-        },
-        {
           "name": "VCPKG_TARGET_TRIPLET",
           "value": "x64-windows",
           "type": "STRING"
@@ -92,8 +79,14 @@
           "name": "BUILD_SHARED_LIBS",
           "value": "true",
           "type": "BOOL"
+        },
+        {
+          "name": "Qt5_DIR",
+          "value": "C:\\tools\\Anaconda3\\Library\\lib\\cmake\\Qt5",
+          "type": "STRING"
         }
-      ]
+      ],
+      "cmakeToolchain": "C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
     }
   ]
 }

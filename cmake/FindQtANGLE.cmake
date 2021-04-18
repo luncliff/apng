@@ -10,8 +10,9 @@
 #   - Qt 6.0 is not tested yet...
 #
 # Tested 'Qt5_DIR's
-#   - Anaconda3 Qt 5.9 - "C:\\Users\\luncl\\Anaconda3\\Library\\lib\\cmake\\Qt5"
-#   - Qt 5.12.9 - "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2017_64\lib\\cmake\\Qt5"
+#   - Anaconda3 (Qt 5.9): "C:\\tools\\Anaconda3\\Library\\lib\\cmake\\Qt5"
+#   - Qt 5.12: "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2017_64\lib\\cmake\\Qt5"
+#   - Qt 5.15: "C:\\Qt\\5.15.2\\msvc2019_64\\lib\\cmake\\Qt5"
 #
 cmake_minimum_required(VERSION 3.18)
 
