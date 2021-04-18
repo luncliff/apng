@@ -17,6 +17,8 @@
 #include <ppltasks.h>
 #include <winrt/Windows.Foundation.h> // namespace winrt::Windows::Foundation
 #include <winrt/Windows.System.h>     // namespace winrt::Windows::System
+#include <concurrent_queue.h>
+#include <pplcancellation_token.h>
 
 // clang-format off
 #include <d3d11.h>
@@ -501,4 +503,23 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Texture2D to EGLImage(eglBindTexImag
         REQUIRE(glGetError() == GL_NO_ERROR);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     }
+}
+
+/// @see https://docs.microsoft.com/en-us/cpp/parallel/concrt/reference/concurrency-namespace?view=msvc-160
+TEST_CASE("concurrent_queue", "[windows]") {
+    concurrency::concurrent_queue<winrt::com_ptr<ID3D11Texture2D>> queue{};
+    REQUIRE(queue.empty());
+    {
+        queue.push(nullptr);
+        winrt::com_ptr<ID3D11Texture2D> texture{};
+        REQUIRE(queue.try_pop(texture));
+        REQUIRE_FALSE(texture);
+    }
+
+    concurrency::cancellation_token_source token_source{};
+    concurrency::cancellation_token token = token_source.get_token();
+    REQUIRE_FALSE(token.is_canceled());
+    REQUIRE(token.is_cancelable());
+    REQUIRE_NOTHROW(token_source.cancel());
+    REQUIRE(token.is_canceled());
 }
