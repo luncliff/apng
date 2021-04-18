@@ -346,11 +346,20 @@ TEST_CASE("OpenGL Sync - Fence", "[opengl][synchronization]") {
         glFlush();
         REQUIRE(glGetError() == GL_NO_ERROR);
         // both fence must be signaled
-        GLenum result = GL_WAIT_FAILED;
-        result = glClientWaitSync(fence1.get(), GL_SYNC_FLUSH_COMMANDS_BIT | 0, GL_TIMEOUT_IGNORED);
-        REQUIRE(result == GL_ALREADY_SIGNALED);
-        result = glClientWaitSync(fence2.get(), GL_SYNC_FLUSH_COMMANDS_BIT | 0, GL_TIMEOUT_IGNORED);
-        REQUIRE(result == GL_ALREADY_SIGNALED);
+        switch (GLenum result1 = glClientWaitSync(fence1.get(), GL_SYNC_FLUSH_COMMANDS_BIT | 0, GL_TIMEOUT_IGNORED)) {
+        case GL_ALREADY_SIGNALED:
+        case GL_CONDITION_SATISFIED:
+            break;
+        default:
+            FAIL(result1);
+        }
+        switch (GLenum result2 = glClientWaitSync(fence2.get(), GL_SYNC_FLUSH_COMMANDS_BIT | 0, GL_TIMEOUT_IGNORED)) {
+        case GL_ALREADY_SIGNALED:
+        case GL_CONDITION_SATISFIED:
+            break;
+        default:
+            FAIL(result2);
+        }
     }
 }
 
