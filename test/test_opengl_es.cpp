@@ -200,7 +200,7 @@ void setup_egl_config(EGLDisplay display, EGLConfig& config, EGLint& minor) {
 
 TEST_CASE("PixelBuffer Surface", "[egl]") {
     EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    EGLConfig es_config = EGL_NO_CONFIG_KHR;
+    EGLConfig es_config{};
     EGLint es_minor = 0;
     setup_egl_config(es_display, es_config, es_minor);
     auto on_return_1 = gsl::finally([es_display]() { REQUIRE(eglTerminate(es_display)); });
@@ -277,7 +277,7 @@ TEST_CASE("OpenGL Sync - Fence", "[opengl][synchronization]") {
     REQUIRE(context.is_valid());
     auto on_return = gsl::finally([es_display]() { eglTerminate(es_display); });
 
-    EGLConfig es_configs[1]{EGL_NO_CONFIG_KHR};
+    EGLConfig es_configs[1]{};
     EGLSurface es_surface = EGL_NO_SURFACE;
     {
         EGLint count = 1;

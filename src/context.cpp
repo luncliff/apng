@@ -152,7 +152,7 @@ void egl_context_t::terminate() noexcept {
     }
     // destroy known surface
     if (surface != EGL_NO_SURFACE) {
-        spdlog::warn("EGL destroy:surface {}", surface);
+        spdlog::warn("EGL destroy: surface {}", surface);
         if (eglDestroySurface(display, surface) == EGL_FALSE)
             report_egl_error("eglDestroySurface", eglGetError());
         surface = EGL_NO_SURFACE;
