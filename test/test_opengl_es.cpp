@@ -256,6 +256,104 @@ TEST_CASE("EGLContext - PixelBuffer Surface", "[egl]") {
     REQUIRE(eglTerminate(es_display));
 }
 
+bool has_extension(std::string_view name) noexcept {
+    GLint count = 0;
+    glGetIntegerv(GL_NUM_EXTENSIONS, &count);
+    if (auto ec = glGetError(); ec != GL_NO_ERROR)
+        return false;
+    for (auto i = 0; i < count; ++i) {
+        const auto extension = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, i));
+        if (extension == name)
+            return true;
+    }
+    return false;
+}
+
+/// @see https://www.khronos.org/opengl/wiki/Synchronization
+/// @see http://docs.gl/es3/glFenceSync
+TEST_CASE("OpenGL Sync - Fence", "[opengl][synchronization]") {
+    EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    egl_context_t context{es_display, EGL_NO_CONTEXT};
+    REQUIRE(context.is_valid());
+    auto on_return = gsl::finally([es_display]() { eglTerminate(es_display); });
+
+    EGLConfig es_configs[1]{EGL_NO_CONFIG_KHR};
+    EGLSurface es_surface = EGL_NO_SURFACE;
+    {
+        EGLint count = 1;
+        REQUIRE(context.get_configs(es_configs, count, nullptr) == 0);
+        EGLint attrs[]{EGL_WIDTH, 128, EGL_HEIGHT, 128, EGL_NONE};
+        es_surface = eglCreatePbufferSurface(es_display, es_configs[0], attrs);
+        REQUIRE(eglGetError() == EGL_SUCCESS);
+    }
+    REQUIRE(context.resume(es_surface, es_configs[0]) == EGL_SUCCESS);
+    REQUIRE(glGetString(GL_VERSION));
+
+    SECTION("GL_SYNC_GPU_COMMANDS_COMPLETE") {
+        GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        REQUIRE(glIsSync(fence));
+        auto on_return = gsl::finally([fence]() { glDeleteSync(fence); });
+
+        /// @see http://docs.gl/es3/glGetSynciv
+        SECTION("Get") {
+            GLsizei count{};
+            GLint values[1]{}; // the following properties use single value
+            glGetSynciv(fence, GL_OBJECT_TYPE, 1, &count, values);
+            REQUIRE(count == 1);
+            REQUIRE(values[0] == GL_SYNC_FENCE);
+            glGetSynciv(fence, GL_SYNC_CONDITION, 1, &count, values);
+            REQUIRE(count == 1);
+            REQUIRE(values[0] == GL_SYNC_GPU_COMMANDS_COMPLETE);
+
+            glGetSynciv(fence, GL_SYNC_STATUS, 1, &count, values);
+            REQUIRE(count == 1);
+            REQUIRE(values[0] == GL_UNSIGNALED);
+
+            glGetSynciv(fence, GL_SYNC_FLAGS, 1, &count, values);
+            REQUIRE(count == 1);
+        }
+        /// @see http://docs.gl/es3/glClientWaitSync
+        SECTION("Wait without signal") {
+            GLuint64 nano = 50'000;
+            GLenum result = glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT | 0, nano);
+            REQUIRE(result == GL_TIMEOUT_EXPIRED);
+        }
+        SECTION("Wait after Flush") {
+            // make some commands and flush
+            glClear(GL_COLOR_BUFFER_BIT);
+            glFlush();
+            REQUIRE(glGetError() == GL_NO_ERROR);
+            // there are some expected values...
+            switch (GLenum result = glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT | 0, GL_TIMEOUT_IGNORED)) {
+            case GL_ALREADY_SIGNALED:
+            case GL_CONDITION_SATISFIED:
+                return;
+            case GL_WAIT_FAILED:
+                FAIL(glGetError());
+            case GL_TIMEOUT_EXPIRED:
+            default:
+                FAIL(result);
+            }
+        }
+    }
+    SECTION("Multiple Fence") {
+        auto fence1 = std::unique_ptr<std::remove_pointer_t<GLsync>, void (*)(GLsync)>{
+            glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0), &glDeleteSync};
+        auto fence2 = std::unique_ptr<std::remove_pointer_t<GLsync>, void (*)(GLsync)>{
+            glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0), &glDeleteSync};
+        // make some commands and flush
+        glClear(GL_COLOR_BUFFER_BIT);
+        glFlush();
+        REQUIRE(glGetError() == GL_NO_ERROR);
+        // both fence must be signaled
+        GLenum result = GL_WAIT_FAILED;
+        result = glClientWaitSync(fence1.get(), GL_SYNC_FLUSH_COMMANDS_BIT | 0, GL_TIMEOUT_IGNORED);
+        REQUIRE(result == GL_ALREADY_SIGNALED);
+        result = glClientWaitSync(fence2.get(), GL_SYNC_FLUSH_COMMANDS_BIT | 0, GL_TIMEOUT_IGNORED);
+        REQUIRE(result == GL_ALREADY_SIGNALED);
+    }
+}
+
 /// @see https://support.microsoft.com/en-us/help/124103/how-to-obtain-a-console-window-handle-hwnd
 HWND get_hwnd_for_console() noexcept {
     constexpr auto max_length = 800;
