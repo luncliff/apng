@@ -6,6 +6,7 @@
 #if __has_include(<EGL/eglext_angle.h>)
 #include <EGL/eglext_angle.h>
 #endif
+#include <winrt/base.h>
 
 class opengl_error_category_t final : public std::error_category {
     const char* name() const noexcept override {
@@ -231,4 +232,49 @@ bool has_extension(EGLDisplay display, std::string_view name) noexcept {
             return ref == name; // if same name, then end the loop.
         },
         &name);
+}
+
+uint32_t make_egl_attributes(gsl::not_null<ID3D11Texture2D*> texture, std::vector<EGLint>& attrs) noexcept {
+    D3D11_TEXTURE2D_DESC desc{};
+    texture->GetDesc(&desc);
+    attrs.emplace_back(EGL_TEXTURE_TARGET);
+    attrs.emplace_back(EGL_TEXTURE_2D);
+    switch (desc.Format) {
+    case DXGI_FORMAT_B8G8R8A8_UNORM:
+        attrs.emplace_back(EGL_TEXTURE_FORMAT);
+        attrs.emplace_back(EGL_TEXTURE_RGBA);
+        break;
+    default:
+        return ENOTSUP;
+    }
+    attrs.emplace_back(EGL_WIDTH);
+    attrs.emplace_back(gsl::narrow_cast<EGLint>(desc.Width));
+    attrs.emplace_back(EGL_HEIGHT);
+    attrs.emplace_back(gsl::narrow_cast<EGLint>(desc.Height));
+    attrs.emplace_back(EGL_NONE);
+    return 0;
+}
+
+uint32_t make_egl_client_surface(EGLDisplay display, EGLConfig config, ID3D11Texture2D* texture,
+                                 EGLSurface& surface) noexcept {
+    if (texture == nullptr)
+        return EINVAL;
+    if (has_extension(display, "EGL_ANGLE_surface_d3d_texture_2d_share_handle") == false)
+        return ENOTSUP;
+    std::vector<EGLint> attrs{};
+    if (auto ec = make_egl_attributes(texture, attrs))
+        return ec;
+
+    winrt::com_ptr<IDXGIResource> resource{};
+    if (auto hr = texture->QueryInterface(resource.put()); FAILED(hr))
+        return hr;
+    HANDLE handle{};
+    if (auto hr = resource->GetSharedHandle(&handle); FAILED(hr))
+        return hr;
+
+    surface = eglCreatePbufferFromClientBuffer(display, EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE, handle, //
+                                               config, attrs.data());
+    if (surface == EGL_NO_SURFACE)
+        return eglGetError();
+    return EXIT_SUCCESS;
 }

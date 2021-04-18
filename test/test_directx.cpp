@@ -40,13 +40,9 @@ using winrt::com_ptr;
     auto fn = reinterpret_cast<decltype(&name)>(eglGetProcAddress(#name));                                             \
     REQUIRE(fn);
 
-class ID3D11DeviceTestCase1 {
-  protected:
+TEST_CASE("D3D_FEATURE_LEVEL_11_0(D3D_DRIVER_TYPE_REFERENCE)", "[directx][!mayfail]") {
     com_ptr<ID3D11Device> device{};
     com_ptr<ID3D11DeviceContext> device_context{};
-};
-
-TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_0(D3D_DRIVER_TYPE_REFERENCE)", "[directx][!mayfail]") {
     D3D_FEATURE_LEVEL levels[1]{D3D_FEATURE_LEVEL_11_0};
     D3D_FEATURE_LEVEL level{};
     REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_REFERENCE, NULL,
@@ -56,7 +52,9 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_0(D3D_DRIVER_TYPE_
     REQUIRE(device->GetFeatureLevel() == level);
 }
 
-TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_0(D3D_DRIVER_TYPE_NULL)", "[directx][!mayfail]") {
+TEST_CASE("D3D_FEATURE_LEVEL_11_0(D3D_DRIVER_TYPE_NULL)", "[directx][!mayfail]") {
+    com_ptr<ID3D11Device> device{};
+    com_ptr<ID3D11DeviceContext> device_context{};
     D3D_FEATURE_LEVEL levels[1]{D3D_FEATURE_LEVEL_11_0};
     D3D_FEATURE_LEVEL level{};
     REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_NULL, NULL,
@@ -66,7 +64,9 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_0(D3D_DRIVER_TYPE_
     REQUIRE(device->GetFeatureLevel() == level);
 }
 
-TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_10_1(D3D_DRIVER_TYPE_HARDWARE)", "[directx][!mayfail]") {
+TEST_CASE("D3D_FEATURE_LEVEL_10_1(D3D_DRIVER_TYPE_HARDWARE)", "[directx][!mayfail]") {
+    com_ptr<ID3D11Device> device{};
+    com_ptr<ID3D11DeviceContext> device_context{};
     D3D_FEATURE_LEVEL levels[1]{D3D_FEATURE_LEVEL_10_1};
     D3D_FEATURE_LEVEL level{};
     REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL,
@@ -76,7 +76,9 @@ TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_10_1(D3D_DRIVER_TYPE_
     REQUIRE(device->GetFeatureLevel() == level);
 }
 
-TEST_CASE_METHOD(ID3D11DeviceTestCase1, "D3D_FEATURE_LEVEL_11_1(D3D_DRIVER_TYPE_HARDWARE)", "[directx][!mayfail]") {
+TEST_CASE("D3D_FEATURE_LEVEL_11_1(D3D_DRIVER_TYPE_HARDWARE)", "[directx][!mayfail]") {
+    com_ptr<ID3D11Device> device{};
+    com_ptr<ID3D11DeviceContext> device_context{};
     D3D_FEATURE_LEVEL levels[2]{D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0};
     D3D_FEATURE_LEVEL level{};
     REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL,
@@ -102,7 +104,9 @@ TEST_CASE("eglGetPlatformDisplay(EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE)", "[egl][d
     REQUIRE(display != EGL_NO_DISPLAY);
 }
 
-TEST_CASE_METHOD(ID3D11DeviceTestCase1, "Device(11.0) for ANGLE", "[egl][directx][!mayfail]") {
+TEST_CASE("Device(11.0) for ANGLE", "[egl][directx][!mayfail]") {
+    com_ptr<ID3D11Device> device{};
+    com_ptr<ID3D11DeviceContext> device_context{};
     D3D_FEATURE_LEVEL level{};
     REQUIRE(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, NULL,
                               D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT |
@@ -339,37 +343,20 @@ SCENARIO_METHOD(ID3D11Texture2DTestCase1, "CreateWICTextureFromFile", "[directx]
     }
 }
 
-void make_client_egl_surface(EGLDisplay display, EGLConfig config, ID3D11Texture2D* texture, EGLSurface& surface) {
-    REQUIRE(has_extension(display, "EGL_ANGLE_surface_d3d_texture_2d_share_handle"));
-
-    D3D11_TEXTURE2D_DESC desc{};
-    texture->GetDesc(&desc);
-
-    com_ptr<IDXGIResource> resource{};
-    REQUIRE(texture->QueryInterface(resource.put()) == S_OK);
-    HANDLE handle{};
-    REQUIRE(resource->GetSharedHandle(&handle) == S_OK);
-
-    EGLint attrs[]{EGL_WIDTH,
-                   gsl::narrow_cast<EGLint>(desc.Width),
-                   EGL_HEIGHT,
-                   gsl::narrow_cast<EGLint>(desc.Height),
-                   EGL_TEXTURE_TARGET,
-                   EGL_TEXTURE_2D,
-                   EGL_TEXTURE_FORMAT,
-                   EGL_TEXTURE_RGBA,
-                   EGL_NONE};
-    surface = eglCreatePbufferFromClientBuffer(display, EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE, handle, config, attrs);
-    if (surface == EGL_NO_SURFACE)
-        FAIL(eglGetError());
-}
-
-class ID3D11Texture2DTestCase2 : public ID3D11Texture2DTestCase1 {
+/// @see https://github.com/Microsoft/angle/wiki/Interop-with-other-DirectX-code
+class ID3D11Texture2DTestCase2 {
   protected:
+    com_ptr<ID3D11Device> device{};
+    com_ptr<ID3D11DeviceContext> device_context{};
     com_ptr<ID3D11Texture2D> texture{};
+    EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    egl_context_t es_context;
 
   public:
-    ID3D11Texture2DTestCase2() noexcept(false) : ID3D11Texture2DTestCase1{} {
+    ID3D11Texture2DTestCase2() noexcept(false) : es_context{es_display, EGL_NO_CONTEXT} {
+        D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
+        if (auto hr = make_device_and_context(device.put(), device_context.put(), level); FAILED(hr))
+            FAIL(hr);
         D3D11_TEXTURE2D_DESC info{};
         info.Width = 640;
         info.Height = 480;
@@ -380,61 +367,84 @@ class ID3D11Texture2DTestCase2 : public ID3D11Texture2DTestCase1 {
         info.Usage = D3D11_USAGE_DEFAULT;
         info.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
         info.CPUAccessFlags = 0;
-        info.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+        info.MiscFlags = D3D11_RESOURCE_MISC_SHARED; // for IDXGIResource::GetSharedHandle
         REQUIRE(device->CreateTexture2D(&info, nullptr, texture.put()) == S_OK);
     }
+    ~ID3D11Texture2DTestCase2() {
+        if (auto ec = es_context.suspend(); ec != EGL_SUCCESS)
+            spdlog::error("es_context failed to suspend: {}", ec);
+        es_context.destroy();
+    }
 };
+
 void setup_egl_config(EGLDisplay display, EGLConfig& config, EGLint& minor);
 
 TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Texture2D to EGLSurface(eglCreatePbufferFromClientBuffer)",
                  "[directx][!mayfail][egl]") {
-    EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    EGLConfig es_config{};
-    EGLint es_minor = 0;
-    setup_egl_config(es_display, es_config, es_minor);
-    auto on_return_1 = gsl::finally([es_display]() { eglTerminate(es_display); });
-
-    EGLint attrs[]{EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 0, EGL_NONE};
-    EGLContext es_context = eglCreateContext(es_display, es_config, EGL_NO_CONTEXT, attrs);
-    if (es_context == EGL_NO_CONTEXT)
-        FAIL(eglGetError());
-    auto on_return_2 = gsl::finally([es_display, es_context]() { eglDestroyContext(es_display, es_context); });
+    {
+        EGLConfig es_config{};
+        EGLSurface es_surface = EGL_NO_SURFACE;
+        EGLint count = 1;
+        REQUIRE(es_context.get_configs(&es_config, count, nullptr) == 0);
+        if (auto ec = make_egl_client_surface(es_display, es_config, texture.get(), es_surface))
+            FAIL(ec);
+        // transfer the ownership to es_context
+        REQUIRE(es_context.resume(es_surface, es_config) == EGL_SUCCESS);
+    }
+    REQUIRE(glGetString(GL_VERSION));
 
     SECTION("GL_FRAMEBUFFER_COMPLETE") {
-        EGLSurface es_surface = EGL_NO_SURFACE;
-        make_client_egl_surface(es_display, es_config, texture.get(), es_surface);
-        auto on_return_3 =
-            gsl::finally([es_display, es_surface]() { REQUIRE(eglDestroySurface(es_display, es_surface)); });
-
-        if (eglMakeCurrent(es_display, es_surface, es_surface, es_context) == false)
-            FAIL(eglGetError());
         REQUIRE(glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
         REQUIRE(eglMakeCurrent(es_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT));
     }
+    SECTION("GL_DRAW_FRAMEBUFFER_BINDING") {
+        GLint fbo = UINT32_MAX;
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &fbo);
+        CAPTURE(fbo);
+        REQUIRE(glGetError() == GL_NO_ERROR);
+    }
+    SECTION("glGetFramebufferAttachmentParameteriv") {
+        GLint value = 0;
+        glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                              GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE, &value);
+        if (auto ec = glGetError())
+            FAIL("GL_COLOR_ATTACHMENT0/GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE");
+        // ...
+    }
+#if defined(GL_FRAMEBUFFER_DEFAULT_WIDTH) && defined(GL_FRAMEBUFFER_DEFAULT_HEIGHT)
+    SECTION("glGetFramebufferParameteriv") {
+        GLint value = 0;
+        glGetFramebufferParameteriv(GL_DRAW_FRAMEBUFFER, GL_FRAMEBUFFER_DEFAULT_WIDTH, &value);
+        if (auto ec = glGetError())
+            FAIL("GL_FRAMEBUFFER_DEFAULT_WIDTH")
+        glGetFramebufferParameteriv(GL_DRAW_FRAMEBUFFER, GL_FRAMEBUFFER_DEFAULT_HEIGHT, &value);
+        if (auto ec = glGetError())
+            FAIL("GL_FRAMEBUFFER_DEFAULT_HEIGHT")
+    }
+#endif
 }
 
 /// @see https://github.com/google/angle/blob/master/util/EGLWindow.cpp
 /// @see https://github.com/google/angle/blob/master/src/tests/egl_tests/EGLPresentPathD3D11Test.cpp
 TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Texture2D to EGLImage(eglBindTexImage)", "[directx][!mayfail][egl]") {
-    EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     EGLConfig es_config{};
-    EGLint es_minor = 0;
-    setup_egl_config(es_display, es_config, es_minor);
-    auto on_return_1 = gsl::finally([es_display]() { eglTerminate(es_display); });
+    {
+        EGLSurface es_surface = EGL_NO_SURFACE;
+        EGLint count = 1;
+        REQUIRE(es_context.get_configs(&es_config, count, nullptr) == 0);
+        EGLint attrs[]{EGL_WIDTH, 128, EGL_HEIGHT, 128, EGL_NONE};
+        es_surface = eglCreatePbufferSurface(es_display, es_config, attrs);
+        if (es_surface == EGL_NO_SURFACE)
+            REQUIRE(eglGetError() == EGL_SUCCESS);
+        // transfer the ownership to es_context
+        REQUIRE(es_context.resume(es_surface, es_config) == EGL_SUCCESS);
+    }
+    REQUIRE(glGetString(GL_VERSION));
 
     EGLSurface es_surface = EGL_NO_SURFACE;
-    make_client_egl_surface(es_display, es_config, texture.get(), es_surface);
-    auto on_return_2 = gsl::finally([es_display, es_surface]() { eglDestroySurface(es_display, es_surface); });
-
-    EGLint attrs[]{EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 0, EGL_NONE};
-    EGLContext es_context = eglCreateContext(es_display, es_config, EGL_NO_CONTEXT, attrs);
-    if (es_context == EGL_NO_CONTEXT)
-        FAIL(eglGetError());
-    auto on_return_3 = gsl::finally([es_display, es_context]() { eglDestroyContext(es_display, es_context); });
-
-    if (eglMakeCurrent(es_display, es_surface, es_surface, es_context) == false)
-        FAIL(eglGetError());
-    REQUIRE(glGetString(GL_VERSION));
+    if (auto ec = make_egl_client_surface(es_display, es_config, texture.get(), es_surface))
+        FAIL(ec);
+    auto on_return_1 = gsl::finally([display = es_display, es_surface]() { eglDestroySurface(display, es_surface); });
 
     SECTION("bind to GL_TEXTURE_2D") {
         constexpr GLenum target = GL_TEXTURE_2D;

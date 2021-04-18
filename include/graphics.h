@@ -26,7 +26,11 @@
 #include <string_view>
 #include <system_error>
 // clang-format off
-#if __has_include(<vulkan/vulkan.h>)
+#if __has_include(<d3d11.h>) // Windows, DirectX 11
+//#include <winrt/base.h>
+#include <d3d11.h>
+#endif
+#if __has_include(<vulkan/vulkan.h>) // Vulkan API
 #  include <vulkan/vulkan.h>
 #endif
 #if __has_include(<QtOpenGL/qgl.h>) // from Qt5::OpenGL
@@ -157,6 +161,7 @@ class _INTERFACE_ egl_context_t final {
 
     EGLContext handle() const noexcept;
 
+    /// @return EGLint Return 0 if successful. Otherwise, redirected from `eglGetError`.
     EGLint get_configs(EGLConfig* configs, EGLint& count, const EGLint* attrs = nullptr) const noexcept;
 };
 
@@ -258,3 +263,19 @@ class _INTERFACE_ pbo_writer_t final {
                   GLenum format = GL_RGBA, GLenum type = GL_UNSIGNED_BYTE) noexcept;
     GLenum map_and_invoke(uint16_t idx, writer_callback_t callback, void* user_data) noexcept;
 };
+
+#if __has_include(<d3d11.h>)
+
+/**
+ * @todo    Give more clear relation between `EGLConfig` and `ID3D11Texture2D`
+ * @param texture   DirectX texture to bind with EGLSurface(EGL_TEXTURE_2D,EGL_TEXTURE_RGBA)
+ * @param surface   Client pixel buffer surface
+ * @return uint32_t 0 if successful
+ *                  `ENOTSUP` if EGL extension is not available.
+ *                  `HRESULT` if DirectX reports error
+ *                  `EGLint` from `eglGetError`
+ */
+_INTERFACE_ uint32_t make_egl_client_surface(EGLDisplay display, EGLConfig config, //
+                                             ID3D11Texture2D* texture, EGLSurface& surface) noexcept;
+
+#endif
