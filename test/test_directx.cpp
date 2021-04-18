@@ -416,10 +416,10 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Texture2D to EGLSurface(eglCreatePbu
         GLint value = 0;
         glGetFramebufferParameteriv(GL_DRAW_FRAMEBUFFER, GL_FRAMEBUFFER_DEFAULT_WIDTH, &value);
         if (auto ec = glGetError())
-            FAIL("GL_FRAMEBUFFER_DEFAULT_WIDTH")
+            FAIL("GL_FRAMEBUFFER_DEFAULT_WIDTH");
         glGetFramebufferParameteriv(GL_DRAW_FRAMEBUFFER, GL_FRAMEBUFFER_DEFAULT_HEIGHT, &value);
         if (auto ec = glGetError())
-            FAIL("GL_FRAMEBUFFER_DEFAULT_HEIGHT")
+            FAIL("GL_FRAMEBUFFER_DEFAULT_HEIGHT");
     }
 #endif
 }
