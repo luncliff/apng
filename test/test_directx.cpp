@@ -27,6 +27,8 @@
 #include <DirectXTex.h>
 #include <DirectXTK/DirectXHelpers.h>
 #include <DirectXTK/WICTextureLoader.h>
+#include <DirectXTK/ScreenGrab.h>
+
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "dxguid.lib")
@@ -505,6 +507,113 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Texture2D to EGLImage(eglBindTexImag
     }
 }
 
+class mapped_tex2d_t final {
+    EGLDisplay display;
+    EGLSurface surface;
+    com_ptr<ID3D11Texture2D> texture;
+    GLuint tex{};
+
+  public:
+    mapped_tex2d_t(EGLDisplay _display, EGLConfig _config, com_ptr<ID3D11Texture2D> _texture)
+        : display{_display}, surface{EGL_NO_SURFACE}, texture{_texture} {
+        if (auto ec = make_egl_client_surface(_display, _config, texture.get(), surface))
+            FAIL(ec);
+        glGenTextures(1, &tex);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        REQUIRE(eglBindTexImage(display, surface, EGL_BACK_BUFFER));
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        REQUIRE(glGetError() == GL_NO_ERROR);
+    }
+    ~mapped_tex2d_t() noexcept {
+        glDeleteTextures(1, &tex);
+        eglDestroySurface(display, surface);
+    }
+    GLuint handle() const noexcept {
+        return tex;
+    }
+};
+
+class fbo_owner_t final {
+    GLuint fbo{};
+
+  public:
+    fbo_owner_t(GLuint tex) noexcept {
+        glGenFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
+        glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+        REQUIRE(glGetError() == GL_NO_ERROR);
+    }
+    ~fbo_owner_t() noexcept {
+        glDeleteFramebuffers(1, &fbo);
+    }
+
+    GLint handle() const noexcept {
+        return fbo;
+    }
+};
+
+TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Save Texture2D to file", "[directx]") {
+    EGLConfig es_config{};
+    {
+        EGLSurface es_surface = EGL_NO_SURFACE;
+        EGLint count = 1;
+        REQUIRE(es_context.get_configs(&es_config, count, nullptr) == 0);
+        EGLint attrs[]{EGL_WIDTH, 128, EGL_HEIGHT, 128, EGL_NONE};
+        es_surface = eglCreatePbufferSurface(es_display, es_config, attrs);
+        if (es_surface == EGL_NO_SURFACE)
+            REQUIRE(eglGetError() == EGL_SUCCESS);
+        // transfer the ownership to es_context
+        REQUIRE(es_context.resume(es_surface, es_config) == EGL_SUCCESS);
+    }
+    REQUIRE(glGetString(GL_VERSION));
+
+    mapped_tex2d_t tex{es_display, es_config, texture};
+    fbo_owner_t framebuffer{tex.handle()};
+
+    REQUIRE(framebuffer.handle() != 0);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer.handle());
+    auto on_return = gsl::finally([]() { glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); });
+
+    REQUIRE(glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
+    glClearColor(1, 1, 0, 1); // the files should have red + green
+    glClear(GL_COLOR_BUFFER_BIT);
+    glFlush();
+    REQUIRE(glGetError() == GL_NO_ERROR);
+
+    D3D11_TEXTURE2D_DESC desc{};
+    texture->GetDesc(&desc);
+    REQUIRE(desc.CPUAccessFlags == 0);
+    REQUIRE(desc.Usage == D3D11_USAGE_DEFAULT);
+
+    com_ptr<ID3D11Resource> resource{};
+    REQUIRE(texture->QueryInterface(resource.put()) == S_OK);
+
+    SECTION("GUID_ContainerFormatPng") {
+        REQUIRE(DirectX::SaveWICTextureToFile(device_context.get(), resource.get(), GUID_ContainerFormatPng,
+                                              L"texture_B8G8R8A8_UNORM.png") == S_OK);
+    }
+    SECTION("GUID_ContainerFormatJpeg") {
+        REQUIRE(DirectX::SaveWICTextureToFile(device_context.get(), resource.get(), GUID_ContainerFormatJpeg,
+                                              L"texture_B8G8R8A8_UNORM.jpeg") == S_OK);
+    }
+    SECTION("GUID_ContainerFormatHeif") {
+        REQUIRE(DirectX::SaveWICTextureToFile(device_context.get(), resource.get(), GUID_ContainerFormatHeif,
+                                              L"texture_B8G8R8A8_UNORM.heif") == S_OK);
+    }
+    SECTION("GUID_ContainerFormatRaw") {
+        auto hr = DirectX::SaveWICTextureToFile(device_context.get(), resource.get(), GUID_ContainerFormatRaw,
+                                                L"texture_B8G8R8A8_UNORM.bin");
+        REQUIRE(hr == WINCODEC_ERR_COMPONENTNOTFOUND);
+    }
+    SECTION("GUID_ContainerFormatWebp") {
+        auto hr = DirectX::SaveWICTextureToFile(device_context.get(), resource.get(), GUID_ContainerFormatWebp,
+                                                L"texture_B8G8R8A8_UNORM.webp");
+        REQUIRE(hr == WINCODEC_ERR_COMPONENTNOTFOUND);
+    }
+}
+
 /// @see https://docs.microsoft.com/en-us/cpp/parallel/concrt/reference/concurrency-namespace?view=msvc-160
 TEST_CASE("concurrent_queue", "[windows]") {
     concurrency::concurrent_queue<winrt::com_ptr<ID3D11Texture2D>> queue{};
@@ -522,4 +631,4 @@ TEST_CASE("concurrent_queue", "[windows]") {
     REQUIRE(token.is_cancelable());
     REQUIRE_NOTHROW(token_source.cancel());
     REQUIRE(token.is_canceled());
-}
+};
