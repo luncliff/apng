@@ -602,11 +602,6 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Save Texture2D to file", "[directx]"
         REQUIRE(DirectX::SaveWICTextureToFile(device_context.get(), resource.get(), GUID_ContainerFormatHeif,
                                               L"texture_B8G8R8A8_UNORM.heif") == S_OK);
     }
-    SECTION("GUID_ContainerFormatRaw") {
-        auto hr = DirectX::SaveWICTextureToFile(device_context.get(), resource.get(), GUID_ContainerFormatRaw,
-                                                L"texture_B8G8R8A8_UNORM.bin");
-        REQUIRE(hr == WINCODEC_ERR_COMPONENTNOTFOUND);
-    }
     SECTION("GUID_ContainerFormatWebp") {
         auto hr = DirectX::SaveWICTextureToFile(device_context.get(), resource.get(), GUID_ContainerFormatWebp,
                                                 L"texture_B8G8R8A8_UNORM.webp");
