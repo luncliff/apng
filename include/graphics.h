@@ -20,8 +20,8 @@
 #   error "unexpected linking configuration"
 #endif
 // clang-format on
-#include <gsl/gsl>
 #include <filesystem>
+#include <gsl/gsl>
 #include <memory_resource>
 #include <string_view>
 #include <system_error>
@@ -67,20 +67,37 @@ _INTERFACE_ void get_extensions(EGLDisplay display, std::vector<std::string_view
 _INTERFACE_ bool has_extension(EGLDisplay display, std::string_view name) noexcept;
 
 /**
- * @brief `EGLContext` and `EGLSurface` owner.
- *        Bind/unbind with `EGLNativeWindowType` using `resume`/`suspend` 
+ * @brief `EGLSurface` owner.
+ * @todo Bind/unbind with `EGLNativeWindowType` using `resume`/`suspend` 
+ */
+class _INTERFACE_ egl_surface_owner_t final {
+    EGLDisplay display;
+    EGLConfig config;
+    gsl::owner<EGLSurface> surface = EGL_NO_SURFACE;
+
+  public:
+    egl_surface_owner_t(EGLDisplay display, EGLConfig config, EGLSurface surface) noexcept;
+    ~egl_surface_owner_t() noexcept;
+    egl_surface_owner_t(egl_surface_owner_t const&) = delete;
+    egl_surface_owner_t& operator=(egl_surface_owner_t const&) = delete;
+    egl_surface_owner_t(egl_surface_owner_t&&) = delete;
+    egl_surface_owner_t& operator=(egl_surface_owner_t&&) = delete;
+
+    EGLint get_size(EGLint& width, EGLint& height) noexcept;
+    EGLSurface handle() const noexcept;
+};
+
+/**
+ * @brief `EGLContext` and `EGLConfig` owner.
  * @see   https://www.saschawillems.de/blog/2015/04/19/using-opengl-es-on-windows-desktops-via-egl/
  */
 class _INTERFACE_ egl_context_t final {
   private:
-    EGLDisplay display = EGL_NO_DISPLAY; // this will be EGL_NO_DISPLAY when `terminate`d
-    uint16_t major = 0, minor = 0;
+    EGLDisplay display;
+    EGLint versions[2]{};   // major, minor
+    EGLConfig configs[1]{}; // ES 2.0, Window/Pbuffer, RGBA 32, Depth 16
     gsl::owner<EGLContext> context = EGL_NO_CONTEXT;
-    EGLConfig configs[3]{};
-    gsl::owner<EGLSurface> surface = EGL_NO_SURFACE; // EGLSurface for Draw/Read
-  public:
-    int32_t surface_width = 0;
-    int32_t surface_height = 0;
+    EGLSurface surface = EGL_NO_SURFACE;
 
   public:
     /**
@@ -99,13 +116,6 @@ class _INTERFACE_ egl_context_t final {
     egl_context_t& operator=(egl_context_t const&) = delete;
     egl_context_t(egl_context_t&&) = delete;
     egl_context_t& operator=(egl_context_t&&) = delete;
-
-    /**
-     * @brief EGLContext == NULL?
-     * @details It is recommended to invoke this function to check whether the construction was successful.
-     *          Notice that the constructor is `noexcept`.
-     */
-    bool is_valid() const noexcept;
 
     /**
      * @brief Destroy all EGL bindings and resources
@@ -129,7 +139,7 @@ class _INTERFACE_ egl_context_t final {
      * @todo    https://github.com/google/angle/blob/master/extensions/EGL_ANGLE_direct_composition.txt
      * @todo    support eglCreatePlatformWindowSurface?
      */
-    EGLint resume(gsl::not_null<EGLNativeWindowType> window) noexcept;
+    [[deprecated]] EGLint resume(gsl::not_null<EGLNativeWindowType> window) noexcept;
 
     /**
      * @brief   Take ownership of the given EGLSurface
@@ -138,7 +148,7 @@ class _INTERFACE_ egl_context_t final {
      * @param es_config   Hint to prevent misuse of `resume(EGLNativeWindowType)`. 
      *                    Always ignored. 
      */
-    EGLint resume(gsl::owner<EGLSurface> es_surface, EGLConfig es_config) noexcept;
+    EGLint resume(EGLSurface es_surface, [[maybu_unused]] EGLConfig es_config) noexcept;
 
     /**
      * @brief   Unbind EGLSurface and EGLContext.
@@ -159,10 +169,13 @@ class _INTERFACE_ egl_context_t final {
      */
     EGLint swap() noexcept;
 
+    /**
+     * @brief EGLContext == NULL?
+     * @details It is recommended to invoke this function to check whether the construction was successful.
+     *          Notice that the constructor is `noexcept`.
+     */
     EGLContext handle() const noexcept;
-
-    /// @return EGLint Return 0 if successful. Otherwise, redirected from `eglGetError`.
-    EGLint get_configs(EGLConfig* configs, EGLint& count, const EGLint* attrs = nullptr) const noexcept;
+    EGLConfig config() const noexcept;
 };
 
 /// @see memcpy

@@ -153,7 +153,7 @@ TEST_CASE("EGL_EXTENSIONS", "[egl][!mayfail]") {
 TEST_CASE("EGL_KHR_fence_sync/EGL_KHR_wait_sync", "[egl][!mayfail]") {
     EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     egl_context_t context{es_display, EGL_NO_CONTEXT};
-    REQUIRE(context.is_valid());
+    REQUIRE_FALSE(context.handle() == EGL_NO_CONTEXT);
     REQUIRE(context.suspend() == EGL_SUCCESS); // the context is NOT bound
 
     REQUIRE(es_display == eglGetCurrentDisplay());
@@ -236,19 +236,18 @@ TEST_CASE("PixelBuffer Surface", "[egl]") {
 TEST_CASE("EGLContext - PixelBuffer Surface", "[egl]") {
     EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     egl_context_t context{es_display, EGL_NO_CONTEXT};
-    REQUIRE(context.is_valid());
-
-    EGLint count = 1;
-    EGLConfig es_configs[1];
-    REQUIRE(context.get_configs(es_configs, count, nullptr) == 0);
+    REQUIRE_FALSE(context.handle() == EGL_NO_CONTEXT);
 
     EGLint attrs[]{EGL_WIDTH, 1024, EGL_HEIGHT, 512, EGL_NONE};
-    EGLSurface es_surface = eglCreatePbufferSurface(es_display, es_configs[0], attrs);
+    EGLSurface es_surface = eglCreatePbufferSurface(es_display, context.config(), attrs);
     REQUIRE(eglGetError() == EGL_SUCCESS);
+    egl_surface_owner_t surface{es_display, context.config(), es_surface};
+    EGLint surface_width = 0, surface_height = 0;
+    REQUIRE(surface.get_size(surface_width, surface_height) == 0);
+    REQUIRE(surface_width == 1024);
+    REQUIRE(surface_height == 512);
 
-    REQUIRE(context.resume(es_surface, es_configs[0]) == EGL_SUCCESS);
-    REQUIRE(context.surface_width == 1024);
-    REQUIRE(context.surface_height == 512);
+    REQUIRE(context.resume(surface.handle(), EGL_NO_CONFIG_KHR) == 0);
     REQUIRE(eglGetCurrentSurface(EGL_READ) == es_surface);
     REQUIRE(eglGetCurrentSurface(EGL_DRAW) == es_surface);
 
@@ -274,19 +273,13 @@ bool has_extension(std::string_view name) noexcept {
 TEST_CASE("OpenGL Sync - Fence", "[opengl][synchronization][!mayfail]") {
     EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     egl_context_t context{es_display, EGL_NO_CONTEXT};
-    REQUIRE(context.is_valid());
+    REQUIRE_FALSE(context.handle() == EGL_NO_CONTEXT);
     auto on_return = gsl::finally([es_display]() { eglTerminate(es_display); });
 
-    EGLConfig es_configs[1]{};
-    EGLSurface es_surface = EGL_NO_SURFACE;
-    {
-        EGLint count = 1;
-        REQUIRE(context.get_configs(es_configs, count, nullptr) == 0);
-        EGLint attrs[]{EGL_WIDTH, 128, EGL_HEIGHT, 128, EGL_NONE};
-        es_surface = eglCreatePbufferSurface(es_display, es_configs[0], attrs);
-        REQUIRE(eglGetError() == EGL_SUCCESS);
-    }
-    REQUIRE(context.resume(es_surface, es_configs[0]) == EGL_SUCCESS);
+    EGLint attrs[]{EGL_WIDTH, 128, EGL_HEIGHT, 128, EGL_NONE};
+    EGLSurface es_surface = eglCreatePbufferSurface(es_display, context.config(), attrs);
+    REQUIRE(eglGetError() == EGL_SUCCESS);
+    REQUIRE(context.resume(es_surface, EGL_NO_CONFIG_KHR) == 0);
     REQUIRE(glGetString(GL_VERSION));
 
     SECTION("GL_SYNC_GPU_COMMANDS_COMPLETE") {
@@ -382,7 +375,7 @@ TEST_CASE("EGLContext helper with Console", "[egl][!mayfail]") {
         FAIL("Faild to find HWND from console name");
 
     egl_context_t context{eglGetDisplay(EGL_DEFAULT_DISPLAY), EGL_NO_CONTEXT};
-    REQUIRE(context.is_valid());
+    REQUIRE_FALSE(context.handle() == EGL_NO_CONTEXT);
     // we can't draw on console window.
     // for some reason ANGLE returns EGL_SUCCESS for this case ...
     REQUIRE(context.resume(handle) == EGL_BAD_NATIVE_WINDOW);
@@ -491,8 +484,8 @@ TEST_CASE("EGLContext helper with Win32 HINSTANCE", "[egl][windows]") {
     REQUIRE(helper.window);
 
     egl_context_t context{eglGetDisplay(EGL_DEFAULT_DISPLAY), EGL_NO_CONTEXT};
-    REQUIRE(context.is_valid());
-    REQUIRE(context.resume(helper.window) == EGL_SUCCESS);
+    REQUIRE_FALSE(context.handle() == EGL_NO_CONTEXT);
+    REQUIRE(context.resume(helper.window) == 0);
 
     SECTION("fullspeed swap") {
         for (auto i = 0u; i < 256; ++i) {
@@ -515,10 +508,10 @@ TEST_CASE("GL_PIXEL_UNPACK_BUFFER 1", "[egl][windows]") {
     REQUIRE(helper.window);
 
     egl_context_t context{eglGetDisplay(EGL_DEFAULT_DISPLAY), eglGetCurrentContext()};
-    REQUIRE(context.is_valid());
-    REQUIRE(context.resume(helper.window) == EGL_SUCCESS);
+    REQUIRE_FALSE(context.handle() == EGL_NO_CONTEXT);
+    REQUIRE(context.resume(helper.window) == 0);
 
-    const auto length = static_cast<GLuint>(context.surface_width * context.surface_height * 4);
+    const auto length = static_cast<GLuint>(1280 * 720);
     REQUIRE(length);
     pbo_writer_t writer{length};
     REQUIRE(writer.is_valid() == GL_NO_ERROR);
@@ -575,7 +568,7 @@ TEST_CASE_METHOD(glfw_test_case, "EGLContext helper with GLFW", "[egl][glfw]") {
 
     GIVEN("separate EGLContext") {
         egl_context_t context{glfwGetEGLDisplay(), glfwGetEGLContext(window.get())};
-        REQUIRE(context.is_valid());
+        REQUIRE_FALSE(context.handle() == EGL_NO_CONTEXT);
 
         WHEN("create EGLSurface and MakeCurrent")
         THEN("EGL_BAD_ALLOC") {
@@ -587,7 +580,7 @@ TEST_CASE_METHOD(glfw_test_case, "EGLContext helper with GLFW", "[egl][glfw]") {
         EGLContext shared_context = glfwGetEGLContext(window.get());
         REQUIRE(shared_context == eglGetCurrentContext());
         egl_context_t context{glfwGetEGLDisplay(), shared_context};
-        REQUIRE(context.is_valid());
+        REQUIRE_FALSE(context.handle() == EGL_NO_CONTEXT);
 
         WHEN("create EGLSurface and MakeCurrent")
         THEN("EGL_BAD_ALLOC") {

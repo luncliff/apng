@@ -13,12 +13,12 @@
 #include <EGL/eglext_angle.h>
 // clang-format on
 
+#include <concurrent_queue.h>
 #include <pplawait.h>
+#include <pplcancellation_token.h>
 #include <ppltasks.h>
 #include <winrt/Windows.Foundation.h> // namespace winrt::Windows::Foundation
 #include <winrt/Windows.System.h>     // namespace winrt::Windows::System
-#include <concurrent_queue.h>
-#include <pplcancellation_token.h>
 
 // clang-format off
 #include <d3d11.h>
@@ -375,7 +375,7 @@ class ID3D11Texture2DTestCase2 {
         REQUIRE(device->CreateTexture2D(&info, nullptr, texture.put()) == S_OK);
     }
     ~ID3D11Texture2DTestCase2() {
-        if (auto ec = es_context.suspend(); ec != EGL_SUCCESS)
+        if (auto ec = es_context.suspend(); ec != 0)
             spdlog::error("es_context failed to suspend: {}", ec);
         es_context.destroy();
     }
@@ -386,14 +386,13 @@ void setup_egl_config(EGLDisplay display, EGLConfig& config, EGLint& minor);
 TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Texture2D to EGLSurface(eglCreatePbufferFromClientBuffer)",
                  "[directx][!mayfail][egl]") {
     {
-        EGLConfig es_config{};
         EGLSurface es_surface = EGL_NO_SURFACE;
-        EGLint count = 1;
-        REQUIRE(es_context.get_configs(&es_config, count, nullptr) == 0);
+        EGLConfig es_config = es_context.config();
+        REQUIRE(es_config);
         if (auto ec = make_egl_client_surface(es_display, es_config, texture.get(), es_surface))
             FAIL(ec);
         // transfer the ownership to es_context
-        REQUIRE(es_context.resume(es_surface, es_config) == EGL_SUCCESS);
+        REQUIRE(es_context.resume(es_surface, es_config) == 0);
     }
     REQUIRE(glGetString(GL_VERSION));
 
@@ -434,14 +433,14 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Texture2D to EGLImage(eglBindTexImag
     EGLConfig es_config{};
     {
         EGLSurface es_surface = EGL_NO_SURFACE;
-        EGLint count = 1;
-        REQUIRE(es_context.get_configs(&es_config, count, nullptr) == 0);
+        es_config = es_context.config();
+        REQUIRE(es_config);
         EGLint attrs[]{EGL_WIDTH, 128, EGL_HEIGHT, 128, EGL_NONE};
         es_surface = eglCreatePbufferSurface(es_display, es_config, attrs);
         if (es_surface == EGL_NO_SURFACE)
             REQUIRE(eglGetError() == EGL_SUCCESS);
         // transfer the ownership to es_context
-        REQUIRE(es_context.resume(es_surface, es_config) == EGL_SUCCESS);
+        REQUIRE(es_context.resume(es_surface, es_config) == 0);
     }
     REQUIRE(glGetString(GL_VERSION));
 
@@ -558,14 +557,14 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Save Texture2D to file", "[directx]"
     EGLConfig es_config{};
     {
         EGLSurface es_surface = EGL_NO_SURFACE;
-        EGLint count = 1;
-        REQUIRE(es_context.get_configs(&es_config, count, nullptr) == 0);
+        es_config = es_context.config();
+        REQUIRE(es_config);
         EGLint attrs[]{EGL_WIDTH, 128, EGL_HEIGHT, 128, EGL_NONE};
         es_surface = eglCreatePbufferSurface(es_display, es_config, attrs);
         if (es_surface == EGL_NO_SURFACE)
             REQUIRE(eglGetError() == EGL_SUCCESS);
         // transfer the ownership to es_context
-        REQUIRE(es_context.resume(es_surface, es_config) == EGL_SUCCESS);
+        REQUIRE(es_context.resume(es_surface, es_config) == 0);
     }
     REQUIRE(glGetString(GL_VERSION));
 
