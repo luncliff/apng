@@ -20,22 +20,27 @@
 #   error "unexpected linking configuration"
 #endif
 // clang-format on
-#include <gsl/gsl>
 #include <filesystem>
+#include <gsl/gsl>
 #include <memory_resource>
 #include <string_view>
 #include <system_error>
 // clang-format off
-#if __has_include(<vulkan/vulkan.h>)
+#if __has_include(<d3d11.h>) // Windows, DirectX 11
+//#include <winrt/base.h>
+#include <d3d11.h>
+#endif
+#if __has_include(<vulkan/vulkan.h>) // Vulkan API
 #  include <vulkan/vulkan.h>
 #endif
-#if __has_include(<QtOpenGL/qgl.h>) // from Qt5::OpenGL
-#  include <QtOpenGL/qgl.h>
-#  include <QtOpenGL/qglfunctions.h>
-#  include <QtANGLE/GLES3/gl3.h>
-#  include <QtANGLE/EGL/egl.h>
-#  include <QtANGLE/EGL/eglext.h>
-//#  include <QtANGLE/EGL/eglext_angle.h>
+#if __has_include(<QtOpenGL>) // from Qt5::OpenGL
+#  if defined(_WIN32)
+#    include <QtANGLE/GLES3/gl3.h>
+#    include <QtANGLE/EGL/egl.h>
+#    include <QtANGLE/EGL/eglext.h>
+// #    include <QtANGLE/EGL/eglext_angle.h>
+#  endif
+#  include <QtOpenGL>
 #elif __has_include(<angle_gl.h>) // from google/ANGLE
 #  include <angle_gl.h>
 #  if __has_include(<angle_windowsstore.h>)
@@ -63,20 +68,37 @@ _INTERFACE_ void get_extensions(EGLDisplay display, std::vector<std::string_view
 _INTERFACE_ bool has_extension(EGLDisplay display, std::string_view name) noexcept;
 
 /**
- * @brief `EGLContext` and `EGLSurface` owner.
- *        Bind/unbind with `EGLNativeWindowType` using `resume`/`suspend` 
+ * @brief `EGLSurface` owner.
+ * @todo Bind/unbind with `EGLNativeWindowType` using `resume`/`suspend` 
+ */
+class _INTERFACE_ egl_surface_owner_t final {
+    EGLDisplay display;
+    EGLConfig config;
+    gsl::owner<EGLSurface> surface = EGL_NO_SURFACE;
+
+  public:
+    egl_surface_owner_t(EGLDisplay display, EGLConfig config, EGLSurface surface) noexcept;
+    ~egl_surface_owner_t() noexcept;
+    egl_surface_owner_t(egl_surface_owner_t const&) = delete;
+    egl_surface_owner_t& operator=(egl_surface_owner_t const&) = delete;
+    egl_surface_owner_t(egl_surface_owner_t&&) = delete;
+    egl_surface_owner_t& operator=(egl_surface_owner_t&&) = delete;
+
+    EGLint get_size(EGLint& width, EGLint& height) noexcept;
+    EGLSurface handle() const noexcept;
+};
+
+/**
+ * @brief `EGLContext` and `EGLConfig` owner.
  * @see   https://www.saschawillems.de/blog/2015/04/19/using-opengl-es-on-windows-desktops-via-egl/
  */
 class _INTERFACE_ egl_context_t final {
   private:
-    EGLDisplay display = EGL_NO_DISPLAY; // this will be EGL_NO_DISPLAY when `terminate`d
-    uint16_t major = 0, minor = 0;
+    EGLDisplay display;
+    EGLint versions[2]{};   // major, minor
+    EGLConfig configs[1]{}; // ES 2.0, Window/Pbuffer, RGBA 32, Depth 16
     gsl::owner<EGLContext> context = EGL_NO_CONTEXT;
-    EGLConfig configs[3]{};
-    gsl::owner<EGLSurface> surface = EGL_NO_SURFACE; // EGLSurface for Draw/Read
-  public:
-    int32_t surface_width = 0;
-    int32_t surface_height = 0;
+    EGLSurface surface = EGL_NO_SURFACE;
 
   public:
     /**
@@ -95,13 +117,6 @@ class _INTERFACE_ egl_context_t final {
     egl_context_t& operator=(egl_context_t const&) = delete;
     egl_context_t(egl_context_t&&) = delete;
     egl_context_t& operator=(egl_context_t&&) = delete;
-
-    /**
-     * @brief EGLContext == NULL?
-     * @details It is recommended to invoke this function to check whether the construction was successful.
-     *          Notice that the constructor is `noexcept`.
-     */
-    bool is_valid() const noexcept;
 
     /**
      * @brief Destroy all EGL bindings and resources
@@ -125,7 +140,7 @@ class _INTERFACE_ egl_context_t final {
      * @todo    https://github.com/google/angle/blob/master/extensions/EGL_ANGLE_direct_composition.txt
      * @todo    support eglCreatePlatformWindowSurface?
      */
-    EGLint resume(gsl::not_null<EGLNativeWindowType> window) noexcept;
+    [[deprecated]] EGLint resume(gsl::not_null<EGLNativeWindowType> window) noexcept;
 
     /**
      * @brief   Take ownership of the given EGLSurface
@@ -134,12 +149,12 @@ class _INTERFACE_ egl_context_t final {
      * @param es_config   Hint to prevent misuse of `resume(EGLNativeWindowType)`. 
      *                    Always ignored. 
      */
-    EGLint resume(gsl::owner<EGLSurface> es_surface, EGLConfig es_config) noexcept;
+    EGLint resume(EGLSurface es_surface, [[maybe_unused]] EGLConfig es_config) noexcept;
 
     /**
      * @brief   Unbind EGLSurface and EGLContext.
      * 
-     * @return EGLint   Redirected from `eglGetError`. 
+     * @return EGLint   `0` if successful. Else, redirected from `eglGetError`.
      *                  `EGL_NOT_INITIALIZED` if `terminate` is invoked.
      * @see eglMakeCurrent
      * @see eglDestroySurface
@@ -155,9 +170,13 @@ class _INTERFACE_ egl_context_t final {
      */
     EGLint swap() noexcept;
 
+    /**
+     * @brief EGLContext == NULL?
+     * @details It is recommended to invoke this function to check whether the construction was successful.
+     *          Notice that the constructor is `noexcept`.
+     */
     EGLContext handle() const noexcept;
-
-    EGLint get_configs(EGLConfig* configs, EGLint& count, const EGLint* attrs = nullptr) const noexcept;
+    EGLConfig config() const noexcept;
 };
 
 /// @see memcpy
@@ -258,3 +277,19 @@ class _INTERFACE_ pbo_writer_t final {
                   GLenum format = GL_RGBA, GLenum type = GL_UNSIGNED_BYTE) noexcept;
     GLenum map_and_invoke(uint16_t idx, writer_callback_t callback, void* user_data) noexcept;
 };
+
+#if __has_include(<d3d11.h>)
+
+/**
+ * @todo    Give more clear relation between `EGLConfig` and `ID3D11Texture2D`
+ * @param texture   DirectX texture to bind with EGLSurface(EGL_TEXTURE_2D,EGL_TEXTURE_RGBA)
+ * @param surface   Client pixel buffer surface
+ * @return uint32_t 0 if successful
+ *                  `ENOTSUP` if EGL extension is not available.
+ *                  `HRESULT` if DirectX reports error
+ *                  `EGLint` from `eglGetError`
+ */
+_INTERFACE_ uint32_t make_egl_client_surface(EGLDisplay display, EGLConfig config, //
+                                             ID3D11Texture2D* texture, EGLSurface& surface) noexcept;
+
+#endif
