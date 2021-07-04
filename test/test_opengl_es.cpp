@@ -155,7 +155,7 @@ TEST_CASE("EGL_KHR_fence_sync/EGL_KHR_wait_sync", "[egl][!mayfail]") {
     EGLDisplay es_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     egl_context_t context{es_display, EGL_NO_CONTEXT};
     REQUIRE_FALSE(context.handle() == EGL_NO_CONTEXT);
-    REQUIRE(context.suspend() == EGL_SUCCESS); // the context is NOT bound
+    REQUIRE(context.suspend() == 0); // the context is NOT bound
 
     REQUIRE(es_display == eglGetCurrentDisplay());
     // some version may not support these extensions...
@@ -380,7 +380,7 @@ TEST_CASE("EGLContext helper with Console", "[egl][!mayfail]") {
     // we can't draw on console window.
     // for some reason ANGLE returns EGL_SUCCESS for this case ...
     REQUIRE(context.resume(handle) == EGL_BAD_NATIVE_WINDOW);
-    REQUIRE(context.suspend() == EGL_SUCCESS);
+    REQUIRE(context.suspend() == 0);
 }
 
 // @todo Change to WinRT (or WinUI?)

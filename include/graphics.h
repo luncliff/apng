@@ -33,13 +33,14 @@
 #if __has_include(<vulkan/vulkan.h>) // Vulkan API
 #  include <vulkan/vulkan.h>
 #endif
-#if __has_include(<QtOpenGL/qgl.h>) // from Qt5::OpenGL
-#  include <QtOpenGL/qgl.h>
-#  include <QtOpenGL/qglfunctions.h>
-#  include <QtANGLE/GLES3/gl3.h>
-#  include <QtANGLE/EGL/egl.h>
-#  include <QtANGLE/EGL/eglext.h>
-//#  include <QtANGLE/EGL/eglext_angle.h>
+#if __has_include(<QtOpenGL>) // from Qt5::OpenGL
+#  if defined(_WIN32)
+#    include <QtANGLE/GLES3/gl3.h>
+#    include <QtANGLE/EGL/egl.h>
+#    include <QtANGLE/EGL/eglext.h>
+// #    include <QtANGLE/EGL/eglext_angle.h>
+#  endif
+#  include <QtOpenGL>
 #elif __has_include(<angle_gl.h>) // from google/ANGLE
 #  include <angle_gl.h>
 #  if __has_include(<angle_windowsstore.h>)
@@ -153,7 +154,7 @@ class _INTERFACE_ egl_context_t final {
     /**
      * @brief   Unbind EGLSurface and EGLContext.
      * 
-     * @return EGLint   Redirected from `eglGetError`. 
+     * @return EGLint   `0` if successful. Else, redirected from `eglGetError`.
      *                  `EGL_NOT_INITIALIZED` if `terminate` is invoked.
      * @see eglMakeCurrent
      * @see eglDestroySurface
