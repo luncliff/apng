@@ -149,7 +149,7 @@ class _INTERFACE_ egl_context_t final {
      * @param es_config   Hint to prevent misuse of `resume(EGLNativeWindowType)`. 
      *                    Always ignored. 
      */
-    EGLint resume(EGLSurface es_surface, [[maybu_unused]] EGLConfig es_config) noexcept;
+    EGLint resume(EGLSurface es_surface, [[maybe_unused]] EGLConfig es_config) noexcept;
 
     /**
      * @brief   Unbind EGLSurface and EGLContext.
