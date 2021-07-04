@@ -25,6 +25,10 @@
 
 using winrt::com_ptr;
 
+#if !defined(EGL_NO_CONFIG_KHR)
+#define EGL_NO_CONFIG_KHR NULL
+#endif
+
 TEST_CASE("eglGetProcAddress != GetProcAddress", "[egl]") {
     auto hmodule = LoadLibraryW(L"libEGL");
     REQUIRE(hmodule);
