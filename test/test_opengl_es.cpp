@@ -109,7 +109,8 @@ TEST_CASE("GL_FRAMEBUFFER_UNDEFINED", "[egl]") {
     auto on_return_1 = gsl::finally([es_display]() { REQUIRE(eglTerminate(es_display)); });
 
     if (es_minor < 5) {
-        WARN("Need EGL 1.5+", eglQueryString(es_display, EGL_VERSION));
+        spdlog::warn("EGL version: {}", eglQueryString(es_display, EGL_VERSION));
+        WARN("Need EGL 1.5+");
         return;
     }
 
