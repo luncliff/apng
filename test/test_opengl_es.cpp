@@ -480,7 +480,7 @@ struct win32_window_helper_t final {
     }
 };
 
-TEST_CASE("EGLContext helper with Win32 HINSTANCE", "[egl][windows]") {
+TEST_CASE("EGLContext helper with Win32 HINSTANCE", "[egl][windows][!mayfail]") {
     win32_window_helper_t helper{};
     REQUIRE(helper.window);
 
@@ -504,7 +504,7 @@ TEST_CASE("EGLContext helper with Win32 HINSTANCE", "[egl][windows]") {
     }
 }
 
-TEST_CASE("GL_PIXEL_UNPACK_BUFFER 1", "[egl][windows]") {
+TEST_CASE("GL_PIXEL_UNPACK_BUFFER 1", "[egl][windows][!mayfail]") {
     win32_window_helper_t helper{};
     REQUIRE(helper.window);
 
@@ -563,7 +563,7 @@ TEST_CASE_METHOD(glfw_test_case, "GLFW + OpenGL ES", "[opengl][glfw]") {
     }
 }
 
-TEST_CASE_METHOD(glfw_test_case, "EGLContext helper with GLFW", "[egl][glfw]") {
+TEST_CASE_METHOD(glfw_test_case, "EGLContext helper with GLFW", "[egl][glfw][!mayfail]") {
     glfwMakeContextCurrent(window.get());
     REQUIRE(glfwGetWin32Window(window.get()));
 
