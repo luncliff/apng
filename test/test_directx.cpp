@@ -601,8 +601,9 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Save Texture2D to file", "[directx]"
         auto hr = DirectX::SaveWICTextureToFile(device_context.get(), resource.get(), GUID_ContainerFormatHeif,
                                                 L"texture_B8G8R8A8_UNORM.heif");
         switch (hr) {
+        case WINCODEC_ERR_COMPONENTINITIALIZEFAILURE:
         case WINCODEC_ERR_COMPONENTNOTFOUND:
-            WARN("WINCODEC_ERR_COMPONENTNOTFOUND");
+            spdlog::warn("GUID_ContainerFormatHeif: {:#x}", hr);
         case S_OK:
             return;
         default:
@@ -613,8 +614,9 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Save Texture2D to file", "[directx]"
         auto hr = DirectX::SaveWICTextureToFile(device_context.get(), resource.get(), GUID_ContainerFormatWebp,
                                                 L"texture_B8G8R8A8_UNORM.webp");
         switch (hr) {
+        case WINCODEC_ERR_COMPONENTINITIALIZEFAILURE:
         case WINCODEC_ERR_COMPONENTNOTFOUND:
-            WARN("WINCODEC_ERR_COMPONENTNOTFOUND");
+            spdlog::warn("GUID_ContainerFormatWebp: {:#x}", hr);
         case S_OK:
             return;
         default:
