@@ -8,7 +8,7 @@
 #endif
 #include <winrt/base.h>
 
-#define report_error_code(fname, ec) spdlog::error("{}: {:#x}", fname, ec), ec;
+#define report_error_code(fname, ec) spdlog::error("{}: {:#x}", fname, ec);
 
 class opengl_error_category_t final : public std::error_category {
     const char* name() const noexcept override {
@@ -69,7 +69,8 @@ EGLSurface egl_surface_owner_t::handle() const noexcept {
 egl_context_t::egl_context_t(EGLDisplay display, EGLContext share_context) noexcept : display{display} {
     spdlog::debug(__FUNCTION__);
     if (eglInitialize(display, versions + 0, versions + 1) == false) {
-        report_error_code("eglInitialize", eglGetError());
+        auto ec = eglGetError();
+        report_error_code("eglInitialize", ec);
         return;
     }
     spdlog::debug("EGLDisplay {} {}.{}", display, versions[0], versions[1]);
@@ -116,8 +117,11 @@ EGLint egl_context_t::resume(gsl::not_null<EGLNativeWindowType> window) noexcept
 
     // bind surface and context
     spdlog::debug("EGL current: {}/{} {}", surface, surface, context);
-    if (eglMakeCurrent(display, surface, surface, context) == EGL_FALSE)
-        return report_error_code("eglMakeCurrent", eglGetError());
+    if (eglMakeCurrent(display, surface, surface, context) == EGL_FALSE) {
+        auto ec = eglGetError();
+        report_error_code("eglMakeCurrent", ec);
+        return ec;
+    }
     return 0;
 }
 
@@ -131,7 +135,8 @@ EGLint egl_context_t::suspend() noexcept {
     if (eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, context) == EGL_FALSE) {
         // OpenGL ES 3.0 will report error. consume it
         // then unbind both surface and context.
-        report_error_code("eglMakeCurrent", eglGetError());
+        auto ec = eglGetError();
+        report_error_code("eglMakeCurrent", ec);
         eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     }
     surface = EGL_NO_SURFACE;
@@ -146,21 +151,26 @@ void egl_context_t::destroy() noexcept {
     // unbind surface and context
     spdlog::debug("EGL current: EGL_NO_SURFACE/EGL_NO_SURFACE EGL_NO_CONTEXT");
     if (eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT) == EGL_FALSE) {
-        report_error_code("eglMakeCurrent", eglGetError());
+        auto ec = eglGetError();
+        report_error_code("eglMakeCurrent", ec);
         return;
     }
     // destroy known context
     if (context != EGL_NO_CONTEXT) {
         spdlog::warn("EGL destroy: context {}", context);
-        if (eglDestroyContext(display, context) == EGL_FALSE)
-            report_error_code("eglDestroyContext", eglGetError());
+        if (eglDestroyContext(display, context) == EGL_FALSE) {
+            auto ec = eglGetError();
+            report_error_code("eglDestroyContext", ec);
+        }
         context = EGL_NO_CONTEXT;
     }
     // destroy known surface
     if (surface != EGL_NO_SURFACE) {
         spdlog::warn("EGL destroy: surface {}", surface);
-        if (eglDestroySurface(display, surface) == EGL_FALSE)
-            report_error_code("eglDestroySurface", eglGetError());
+        if (eglDestroySurface(display, surface) == EGL_FALSE) {
+            auto ec = eglGetError();
+            report_error_code("eglDestroySurface", ec);
+        }
         surface = EGL_NO_SURFACE;
     }
     display = EGL_NO_DISPLAY;
