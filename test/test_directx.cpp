@@ -598,13 +598,28 @@ TEST_CASE_METHOD(ID3D11Texture2DTestCase2, "Save Texture2D to file", "[directx]"
                                               L"texture_B8G8R8A8_UNORM.jpeg") == S_OK);
     }
     SECTION("GUID_ContainerFormatHeif") {
-        REQUIRE(DirectX::SaveWICTextureToFile(device_context.get(), resource.get(), GUID_ContainerFormatHeif,
-                                              L"texture_B8G8R8A8_UNORM.heif") == S_OK);
+        auto hr = DirectX::SaveWICTextureToFile(device_context.get(), resource.get(), GUID_ContainerFormatHeif,
+                                                L"texture_B8G8R8A8_UNORM.heif");
+        switch (hr) {
+        case WINCODEC_ERR_COMPONENTNOTFOUND:
+            WARN("WINCODEC_ERR_COMPONENTNOTFOUND");
+        case S_OK:
+            return;
+        default:
+            REQUIRE(hr == S_OK);
+        }
     }
     SECTION("GUID_ContainerFormatWebp") {
         auto hr = DirectX::SaveWICTextureToFile(device_context.get(), resource.get(), GUID_ContainerFormatWebp,
                                                 L"texture_B8G8R8A8_UNORM.webp");
-        REQUIRE(hr == WINCODEC_ERR_COMPONENTNOTFOUND);
+        switch (hr) {
+        case WINCODEC_ERR_COMPONENTNOTFOUND:
+            WARN("WINCODEC_ERR_COMPONENTNOTFOUND");
+        case S_OK:
+            return;
+        default:
+            REQUIRE(hr == S_OK);
+        }
     }
 }
 
